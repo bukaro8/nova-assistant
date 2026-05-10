@@ -171,6 +171,8 @@ npm run telegram:habit
 
 The listener uses Telegram polling via `getUpdates`.
 
+Standalone Telegram scripts load `.env` through Node's `--env-file=.env` flag.
+
 When the first valid reply arrives, NOVA saves the Telegram chat ID to the seeded user if `telegramHabitChatId` is empty.
 
 ### Test Replies

@@ -33,12 +33,19 @@ type TelegramResponse<T> = {
   description?: string;
 };
 
-const token = process.env.TELEGRAM_HABIT_BOT_TOKEN;
+const token = process.env.TELEGRAM_HABIT_BOT_TOKEN?.trim();
 const apiBaseUrl = token ? `https://api.telegram.org/bot${token}` : "";
 
 function requireHabitBotToken() {
   if (!token) {
-    throw new Error("TELEGRAM_HABIT_BOT_TOKEN is required.");
+    throw new Error(
+      [
+        "TELEGRAM_HABIT_BOT_TOKEN is missing.",
+        "Add it to .env, then run one of:",
+        "  npm run telegram:habit:test",
+        "  npm run telegram:habit",
+      ].join("\n"),
+    );
   }
 }
 
@@ -57,6 +64,16 @@ async function telegramRequest<T>(
   const payload = (await response.json()) as TelegramResponse<T>;
 
   if (!response.ok || !payload.ok) {
+    if (payload.description === "Unauthorized") {
+      throw new Error(
+        [
+          "Telegram rejected TELEGRAM_HABIT_BOT_TOKEN as Unauthorized.",
+          "Check that the value in .env is the exact token from BotFather and has no extra spaces.",
+          "If you regenerated the token in BotFather, update .env and rerun the command.",
+        ].join("\n"),
+      );
+    }
+
     throw new Error(
       payload.description ?? `Telegram request failed: ${method}`,
     );
