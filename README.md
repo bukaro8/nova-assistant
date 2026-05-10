@@ -163,6 +163,16 @@ npm run telegram:habit:test
 
 This calls Telegram `getMe` and prints the connected bot name.
 
+### Delete Existing Webhook
+
+Polling cannot receive updates while a webhook is configured for the same bot. If Telegram polling does not receive messages, clear the habit bot webhook:
+
+```bash
+npm run telegram:habit:delete-webhook
+```
+
+This loads `.env` and calls Telegram `deleteWebhook` for `TELEGRAM_HABIT_BOT_TOKEN`.
+
 ### Start Reply Listener
 
 ```bash
@@ -202,6 +212,7 @@ npm run db:generate
 npm run db:seed
 npm run db:studio
 npm run telegram:habit:test
+npm run telegram:habit:delete-webhook
 npm run telegram:habit
 docker compose up -d
 docker compose down

@@ -36,6 +36,15 @@ type TelegramResponse<T> = {
 const token = process.env.TELEGRAM_HABIT_BOT_TOKEN?.trim();
 const apiBaseUrl = token ? `https://api.telegram.org/bot${token}` : "";
 
+function debug(message: string, meta?: Record<string, unknown>) {
+  if (meta) {
+    console.log(`[telegram:habit] ${message}`, meta);
+    return;
+  }
+
+  console.log(`[telegram:habit] ${message}`);
+}
+
 function requireHabitBotToken() {
   if (!token) {
     throw new Error(
@@ -104,8 +113,17 @@ async function findOrClaimUser(chatId: string) {
   });
 
   if (existingUser) {
+    debug("User found by telegramHabitChatId.", {
+      chatId,
+      userId: existingUser.id,
+      email: existingUser.email,
+    });
     return existingUser;
   }
+
+  debug("No user found for telegramHabitChatId; looking for unclaimed user.", {
+    chatId,
+  });
 
   const unclaimedUser = await prisma.user.findFirst({
     where: {
@@ -117,10 +135,13 @@ async function findOrClaimUser(chatId: string) {
   });
 
   if (!unclaimedUser) {
+    debug("No unclaimed user available for Telegram habit chat.", {
+      chatId,
+    });
     return null;
   }
 
-  return prisma.user.update({
+  const claimedUser = await prisma.user.update({
     where: {
       id: unclaimedUser.id,
     },
@@ -128,11 +149,26 @@ async function findOrClaimUser(chatId: string) {
       telegramHabitChatId: chatId,
     },
   });
+
+  debug("User claimed for Telegram habit chat.", {
+    chatId,
+    userId: claimedUser.id,
+    email: claimedUser.email,
+  });
+
+  return claimedUser;
 }
 
 async function logHabitReply(message: TelegramMessage) {
   const replyText = message.text?.trim();
   const chatId = String(message.chat.id);
+
+  debug("Incoming Telegram message.", {
+    chatId,
+    text: message.text,
+    messageId: message.message_id,
+    telegramDate: message.date,
+  });
 
   if (!replyText) {
     console.warn(`Ignoring non-text Telegram message from chat ${chatId}.`);
@@ -147,6 +183,11 @@ async function logHabitReply(message: TelegramMessage) {
   }
 
   const normalizedReply = normalizeReply(replyText);
+  debug("Normalised reply text.", {
+    chatId,
+    normalizedReply,
+  });
+
   const habits = await prisma.habit.findMany({
     where: {
       userId: user.id,
@@ -159,6 +200,15 @@ async function logHabitReply(message: TelegramMessage) {
       (validReply) => normalizeReply(validReply) === normalizedReply,
     ),
   );
+
+  debug("Habit match result.", {
+    chatId,
+    userId: user.id,
+    normalizedReply,
+    activeHabitCount: habits.length,
+    matchCount: matchingHabits.length,
+    matchedHabitCodes: matchingHabits.map((habit) => habit.code),
+  });
 
   if (matchingHabits.length === 0) {
     console.warn(
@@ -190,7 +240,7 @@ async function logHabitReply(message: TelegramMessage) {
   });
 
   if (existingLog) {
-    await prisma.habitLog.update({
+    const updatedLog = await prisma.habitLog.update({
       where: {
         id: existingLog.id,
       },
@@ -202,11 +252,20 @@ async function logHabitReply(message: TelegramMessage) {
       },
     });
 
+    debug("HabitLog update result.", {
+      habitLogId: updatedLog.id,
+      userId: updatedLog.userId,
+      habitId: updatedLog.habitId,
+      status: updatedLog.status,
+      source: updatedLog.source,
+      replyText: updatedLog.replyText,
+      loggedAt: updatedLog.loggedAt,
+    });
     console.log(`Updated ${habit.code} log for ${user.email}.`);
     return;
   }
 
-  await prisma.habitLog.create({
+  const createdLog = await prisma.habitLog.create({
     data: {
       userId: user.id,
       habitId: habit.id,
@@ -217,6 +276,15 @@ async function logHabitReply(message: TelegramMessage) {
     },
   });
 
+  debug("HabitLog create result.", {
+    habitLogId: createdLog.id,
+    userId: createdLog.userId,
+    habitId: createdLog.habitId,
+    status: createdLog.status,
+    source: createdLog.source,
+    replyText: createdLog.replyText,
+    loggedAt: createdLog.loggedAt,
+  });
   console.log(`Logged ${habit.code} for ${user.email}.`);
 }
 
@@ -225,6 +293,11 @@ async function pollHabitReplies() {
 
   let offset = 0;
 
+  debug("Polling started.", {
+    offset,
+    allowedUpdates: ["message"],
+    timeoutSeconds: 30,
+  });
   console.log("Telegram habit listener started. Press Ctrl+C to stop.");
 
   while (true) {
@@ -234,14 +307,30 @@ async function pollHabitReplies() {
       allowed_updates: ["message"],
     });
 
+    debug("Raw update count received.", {
+      count: updates.length,
+      offset,
+      updateIds: updates.map((update) => update.update_id),
+    });
+
     for (const update of updates) {
       offset = update.update_id + 1;
 
       if (!update.message) {
+        debug("Skipping update without message.", {
+          updateId: update.update_id,
+        });
         continue;
       }
 
-      await logHabitReply(update.message);
+      try {
+        await logHabitReply(update.message);
+      } catch (error) {
+        console.error("[telegram:habit] Caught error while processing update.", {
+          updateId: update.update_id,
+          error,
+        });
+      }
     }
   }
 }
@@ -253,6 +342,11 @@ export async function testHabitBotConnection() {
   );
 }
 
+export async function deleteHabitBotWebhook() {
+  await telegramRequest<boolean>("deleteWebhook");
+  console.log("Deleted Telegram habit bot webhook.");
+}
+
 async function shutdown() {
   await prisma.$disconnect();
   process.exit(0);
@@ -261,10 +355,19 @@ async function shutdown() {
 process.once("SIGINT", shutdown);
 process.once("SIGTERM", shutdown);
 
-if (process.argv.includes("--test")) {
+if (process.argv.includes("--delete-webhook")) {
+  deleteHabitBotWebhook()
+    .catch((error) => {
+      console.error("[telegram:habit] Caught error.", error);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+} else if (process.argv.includes("--test")) {
   testHabitBotConnection()
     .catch((error) => {
-      console.error(error);
+      console.error("[telegram:habit] Caught error.", error);
       process.exit(1);
     })
     .finally(async () => {
@@ -272,7 +375,7 @@ if (process.argv.includes("--test")) {
     });
 } else {
   pollHabitReplies().catch(async (error) => {
-    console.error(error);
+    console.error("[telegram:habit] Caught error.", error);
     await prisma.$disconnect();
     process.exit(1);
   });
