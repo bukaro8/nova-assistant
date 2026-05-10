@@ -36,6 +36,7 @@ async function main() {
       code: "Dut",
       reminderTime: "14:00",
       reminderMessage: "Time to take Dutasteride.",
+      validReplies: defaultReplies,
       retryTimes: ["16:00", "18:00"],
       scheduleDays: allDays,
     },
@@ -44,6 +45,7 @@ async function main() {
       code: "Walk",
       reminderTime: "20:00",
       reminderMessage: "Time for your walk.",
+      validReplies: defaultReplies,
       retryTimes: ["21:00"],
       scheduleDays: allDays,
     },
@@ -52,6 +54,7 @@ async function main() {
       code: "Train",
       reminderTime: "16:00",
       reminderMessage: "Time for training.",
+      validReplies: defaultReplies,
       retryTimes: ["18:00"],
       scheduleDays: weekdayTrainingDays,
     },
@@ -60,8 +63,18 @@ async function main() {
       code: "Mag",
       reminderTime: "21:15",
       reminderMessage: "Time to take Magnesium.",
+      validReplies: defaultReplies,
       retryTimes: ["22:00"],
       scheduleDays: allDays,
+    },
+    {
+      name: "Study",
+      code: "Study",
+      reminderTime: "15:00",
+      reminderMessage: "Have you studied English today? 📘 Reply: Study",
+      validReplies: ["study"],
+      retryTimes: [],
+      scheduleDays: ["MON", "TUE", "WED", "THU", "SAT"],
     },
   ];
 
@@ -76,12 +89,10 @@ async function main() {
       update: {
         ...habit,
         active: true,
-        validReplies: defaultReplies,
       },
       create: {
         ...habit,
         active: true,
-        validReplies: defaultReplies,
         userId: user.id,
       },
     });
