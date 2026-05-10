@@ -14,7 +14,6 @@ const prisma = new PrismaClient({ adapter });
 
 const allDays = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 const weekdayTrainingDays = ["MON", "TUE", "WED", "THU"];
-const defaultReplies = ["done", "skip", "missed"];
 
 async function main() {
   const user = await prisma.user.upsert({
@@ -35,8 +34,8 @@ async function main() {
       name: "Dutasteride",
       code: "Dut",
       reminderTime: "14:00",
-      reminderMessage: "Time to take Dutasteride.",
-      validReplies: defaultReplies,
+      reminderMessage: "Have you taken Dutasteride 💊 ? Reply: Dut",
+      validReplies: ["dut"],
       retryTimes: ["16:00", "18:00"],
       scheduleDays: allDays,
     },
@@ -44,8 +43,8 @@ async function main() {
       name: "Walk",
       code: "Walk",
       reminderTime: "20:00",
-      reminderMessage: "Time for your walk.",
-      validReplies: defaultReplies,
+      reminderMessage: "Have you gone for a walk 🚶🏻‍♂️ ? Reply: Walk",
+      validReplies: ["walk"],
       retryTimes: ["21:00"],
       scheduleDays: allDays,
     },
@@ -53,8 +52,8 @@ async function main() {
       name: "Training",
       code: "Train",
       reminderTime: "16:00",
-      reminderMessage: "Time for training.",
-      validReplies: defaultReplies,
+      reminderMessage: "Have you trained today 💪 ? Reply: Train",
+      validReplies: ["train"],
       retryTimes: ["18:00"],
       scheduleDays: weekdayTrainingDays,
     },
@@ -62,8 +61,8 @@ async function main() {
       name: "Magnesium",
       code: "Mag",
       reminderTime: "21:15",
-      reminderMessage: "Time to take Magnesium.",
-      validReplies: defaultReplies,
+      reminderMessage: "Have you taken Magnesium 😴 ? Reply: Mag",
+      validReplies: ["mag"],
       retryTimes: ["22:00"],
       scheduleDays: allDays,
     },

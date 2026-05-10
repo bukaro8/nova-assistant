@@ -8,32 +8,34 @@ datasource db {
 }
 
 model User {
-  id                    String      @id @default(cuid())
-  email                 String      @unique
+  id                    String        @id @default(cuid())
+  email                 String        @unique
   name                  String?
-  telegramHabitChatId   String?     @unique
-  telegramExpenseChatId String?     @unique
-  createdAt             DateTime    @default(now())
+  telegramHabitChatId   String?       @unique
+  telegramExpenseChatId String?       @unique
+  createdAt             DateTime      @default(now())
   habits                Habit[]
   habitLogs             HabitLog[]
   expenses              Expense[]
+  reminderLogs          ReminderLog[]
   weightLogs            WeightLog[]
 }
 
 model Habit {
-  id              String     @id @default(cuid())
+  id              String        @id @default(cuid())
   userId          String
-  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   name            String
   code            String
-  active          Boolean    @default(true)
+  active          Boolean       @default(true)
   reminderTime    String
   reminderMessage String
   validReplies    String[]
   retryTimes      String[]
   scheduleDays    String[]
-  createdAt       DateTime   @default(now())
+  createdAt       DateTime      @default(now())
   logs            HabitLog[]
+  reminderLogs    ReminderLog[]
 
   @@unique([userId, code])
   @@index([userId])
@@ -53,6 +55,21 @@ model HabitLog {
 
   @@index([habitId])
   @@index([userId, loggedAt])
+}
+
+model ReminderLog {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habitId       String
+  habit         Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  sentAt        DateTime @default(now())
+  scheduledTime String
+  type          String
+
+  @@unique([userId, habitId, scheduledTime, type])
+  @@index([userId, sentAt])
+  @@index([habitId])
 }
 
 model Expense {

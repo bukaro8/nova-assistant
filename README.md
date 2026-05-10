@@ -141,7 +141,7 @@ npm run db:studio
 
 ## Telegram Habit Bot
 
-The habit bot currently supports reply logging only. It does not send scheduled reminders yet.
+The habit bot supports reply logging and scheduled reminder sending. It uses polling for development.
 
 ### BotFather Setup
 
@@ -185,6 +185,44 @@ Standalone Telegram scripts load `.env` through Node's `--env-file=.env` flag.
 
 When the first valid reply arrives, NOVA saves the Telegram chat ID to the seeded user if `telegramHabitChatId` is empty.
 
+### Start Reminder Scheduler
+
+```bash
+npm run telegram:habit:scheduler
+```
+
+The scheduler checks UK local time once per minute. It sends reminders when the current `HH:mm` matches a habit `reminderTime` or one of its `retryTimes`, and only when the current UK day is in `scheduleDays`.
+
+Retry reminders are skipped if the habit already has a `DONE` `HabitLog` for the current UK day.
+
+Every send creates a `ReminderLog` with:
+
+- `userId`
+- `habitId`
+- `sentAt`
+- `scheduledTime`
+- `type`
+
+`ReminderLog` prevents the same reminder from being sent twice for the same user, habit, scheduled minute, and reminder type.
+
+### Run Listener And Scheduler Together
+
+```bash
+npm run telegram:habit:dev
+```
+
+This starts the reply listener and reminder scheduler in the same Node process.
+
+### Test Scheduler Without Waiting
+
+You can run one scheduler pass with a fake UK time and day:
+
+```bash
+npm run telegram:habit:scheduler -- --once --time 15:00 --day MON
+```
+
+That tests the Study reminder path immediately. To test duplicate prevention, run the same command twice and check that the second run logs that the reminder was already sent.
+
 ### Test Replies
 
 Send one of these messages to your habit bot in Telegram:
@@ -214,6 +252,8 @@ npm run db:studio
 npm run telegram:habit:test
 npm run telegram:habit:delete-webhook
 npm run telegram:habit
+npm run telegram:habit:scheduler
+npm run telegram:habit:dev
 docker compose up -d
 docker compose down
 ```

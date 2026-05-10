@@ -14,6 +14,8 @@
     "db:validate": "prisma validate",
     "telegram:habit": "node --env-file=.env --import tsx src/server/telegram/habit-bot.ts",
     "telegram:habit:delete-webhook": "node --env-file=.env --import tsx src/server/telegram/habit-bot.ts --delete-webhook",
+    "telegram:habit:dev": "node --env-file=.env --import tsx src/server/telegram/habit-dev.ts",
+    "telegram:habit:scheduler": "node --env-file=.env --import tsx src/server/telegram/habit-scheduler.ts",
     "telegram:habit:test": "node --env-file=.env --import tsx src/server/telegram/habit-bot.ts --test"
   },
   "dependencies": {

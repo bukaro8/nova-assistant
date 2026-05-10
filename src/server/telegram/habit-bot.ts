@@ -1,13 +1,13 @@
 import "dotenv/config";
 
-import { prisma } from "../db/prisma";
+import { pathToFileURL } from "node:url";
 
-type TelegramUser = {
-  id: number;
-  is_bot: boolean;
-  first_name?: string;
-  username?: string;
-};
+import { prisma } from "../db/prisma";
+import {
+  requireHabitBotToken,
+  type TelegramUser,
+  telegramRequest,
+} from "./api";
 
 type TelegramChat = {
   id: number;
@@ -27,15 +27,6 @@ type TelegramUpdate = {
   message?: TelegramMessage;
 };
 
-type TelegramResponse<T> = {
-  ok: boolean;
-  result?: T;
-  description?: string;
-};
-
-const token = process.env.TELEGRAM_HABIT_BOT_TOKEN?.trim();
-const apiBaseUrl = token ? `https://api.telegram.org/bot${token}` : "";
-
 function debug(message: string, meta?: Record<string, unknown>) {
   if (meta) {
     console.log(`[telegram:habit] ${message}`, meta);
@@ -43,52 +34,6 @@ function debug(message: string, meta?: Record<string, unknown>) {
   }
 
   console.log(`[telegram:habit] ${message}`);
-}
-
-function requireHabitBotToken() {
-  if (!token) {
-    throw new Error(
-      [
-        "TELEGRAM_HABIT_BOT_TOKEN is missing.",
-        "Add it to .env, then run one of:",
-        "  npm run telegram:habit:test",
-        "  npm run telegram:habit",
-      ].join("\n"),
-    );
-  }
-}
-
-async function telegramRequest<T>(
-  method: string,
-  body?: Record<string, unknown>,
-): Promise<T> {
-  requireHabitBotToken();
-
-  const response = await fetch(`${apiBaseUrl}/${method}`, {
-    method: body ? "POST" : "GET",
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  const payload = (await response.json()) as TelegramResponse<T>;
-
-  if (!response.ok || !payload.ok) {
-    if (payload.description === "Unauthorized") {
-      throw new Error(
-        [
-          "Telegram rejected TELEGRAM_HABIT_BOT_TOKEN as Unauthorized.",
-          "Check that the value in .env is the exact token from BotFather and has no extra spaces.",
-          "If you regenerated the token in BotFather, update .env and rerun the command.",
-        ].join("\n"),
-      );
-    }
-
-    throw new Error(
-      payload.description ?? `Telegram request failed: ${method}`,
-    );
-  }
-
-  return payload.result as T;
 }
 
 function normalizeReply(text: string) {
@@ -288,7 +233,7 @@ async function logHabitReply(message: TelegramMessage) {
   console.log(`Logged ${habit.code} for ${user.email}.`);
 }
 
-async function pollHabitReplies() {
+export async function pollHabitReplies() {
   requireHabitBotToken();
 
   let offset = 0;
@@ -352,31 +297,39 @@ async function shutdown() {
   process.exit(0);
 }
 
-process.once("SIGINT", shutdown);
-process.once("SIGTERM", shutdown);
+function isMainModule() {
+  return process.argv[1]
+    ? import.meta.url === pathToFileURL(process.argv[1]).href
+    : false;
+}
 
-if (process.argv.includes("--delete-webhook")) {
-  deleteHabitBotWebhook()
-    .catch((error) => {
+if (isMainModule()) {
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
+
+  if (process.argv.includes("--delete-webhook")) {
+    deleteHabitBotWebhook()
+      .catch((error) => {
+        console.error("[telegram:habit] Caught error.", error);
+        process.exit(1);
+      })
+      .finally(async () => {
+        await prisma.$disconnect();
+      });
+  } else if (process.argv.includes("--test")) {
+    testHabitBotConnection()
+      .catch((error) => {
+        console.error("[telegram:habit] Caught error.", error);
+        process.exit(1);
+      })
+      .finally(async () => {
+        await prisma.$disconnect();
+      });
+  } else {
+    pollHabitReplies().catch(async (error) => {
       console.error("[telegram:habit] Caught error.", error);
-      process.exit(1);
-    })
-    .finally(async () => {
       await prisma.$disconnect();
-    });
-} else if (process.argv.includes("--test")) {
-  testHabitBotConnection()
-    .catch((error) => {
-      console.error("[telegram:habit] Caught error.", error);
       process.exit(1);
-    })
-    .finally(async () => {
-      await prisma.$disconnect();
     });
-} else {
-  pollHabitReplies().catch(async (error) => {
-    console.error("[telegram:habit] Caught error.", error);
-    await prisma.$disconnect();
-    process.exit(1);
-  });
+  }
 }
