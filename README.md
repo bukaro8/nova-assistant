@@ -1,36 +1,155 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NOVA
 
-## Getting Started
+NOVA is a personal assistant app foundation built with Next.js, TypeScript, Tailwind CSS, shadcn/ui, Prisma, and PostgreSQL.
 
-First, run the development server:
+This repository currently contains only the project foundation. Telegram bots, authentication, dashboard pages, AI categorisation, and business logic are intentionally not implemented yet.
+
+## Tech Stack
+
+- Next.js App Router
+- TypeScript
+- Tailwind CSS
+- shadcn/ui
+- Prisma ORM
+- PostgreSQL
+- Docker Compose for the local database
+
+## Requirements
+
+- Node.js 20 or newer
+- npm
+- Docker Desktop or a compatible Docker runtime
+
+## Setup
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Create your local environment file:
+
+```bash
+cp .env.example .env
+```
+
+Start PostgreSQL:
+
+```bash
+docker compose up -d
+```
+
+Validate the Prisma schema:
+
+```bash
+npm run db:validate
+```
+
+Create and apply a database migration:
+
+```bash
+npm run db:migrate -- --name migration_name
+```
+
+Generate the Prisma client:
+
+```bash
+npm run db:generate
+```
+
+Seed the database with development data:
+
+```bash
+npm run db:seed
+```
+
+Open Prisma Studio:
+
+```bash
+npm run db:studio
+```
+
+Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Database
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Local PostgreSQL is configured in `docker-compose.yml`.
 
-## Learn More
+The Prisma schema is in `prisma/schema.prisma`.
 
-To learn more about Next.js, take a look at the following resources:
+Environment variables are read by `prisma.config.ts` from `.env`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Migrations
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Use Prisma migrations for schema changes:
 
-## Deploy on Vercel
+```bash
+npm run db:migrate -- --name describe_the_change
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This applies the migration locally and regenerates the Prisma client.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Seed Data
+
+The seed script is `prisma/seed.ts`. It creates a development user and the initial habit definitions:
+
+- Dutasteride
+- Walk
+- Training
+- Magnesium
+
+Run it with:
+
+```bash
+npm run db:seed
+```
+
+### Prisma Studio
+
+Open the local database browser with:
+
+```bash
+npm run db:studio
+```
+
+## Useful Commands
+
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run db:validate
+npm run db:migrate -- --name describe_the_change
+npm run db:generate
+npm run db:seed
+npm run db:studio
+docker compose up -d
+docker compose down
+```
+
+## Current Folder Structure
+
+```text
+src/
+  app/                  Next.js App Router routes
+  components/ui/        shadcn/ui components
+  features/
+    expenses/           Future expense tracking feature code
+    habits/             Future habit reminder feature code
+    weight/             Future weight logging feature code
+  hooks/                Shared React hooks
+  lib/                  Shared utilities
+  server/               Future server-only helpers
+  types/                Shared TypeScript types
+prisma/
+  schema.prisma         Prisma data model
+  seed.ts               Development seed data
+docker-compose.yml      Local PostgreSQL service
+```

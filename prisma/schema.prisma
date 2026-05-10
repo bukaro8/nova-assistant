@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                    String      @id @default(cuid())
+  email                 String      @unique
+  name                  String?
+  telegramHabitChatId   String?     @unique
+  telegramExpenseChatId String?     @unique
+  createdAt             DateTime    @default(now())
+  habits                Habit[]
+  habitLogs             HabitLog[]
+  expenses              Expense[]
+  weightLogs            WeightLog[]
+}
+
+model Habit {
+  id              String     @id @default(cuid())
+  userId          String
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  code            String
+  active          Boolean    @default(true)
+  reminderTime    String
+  reminderMessage String
+  validReplies    String[]
+  retryTimes      String[]
+  scheduleDays    String[]
+  createdAt       DateTime   @default(now())
+  logs            HabitLog[]
+
+  @@unique([userId, code])
+  @@index([userId])
+}
+
+model HabitLog {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habitId   String
+  habit     Habit       @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  status    HabitStatus
+  source    LogSource
+  replyText String?
+  loggedAt  DateTime
+  createdAt DateTime    @default(now())
+
+  @@index([habitId])
+  @@index([userId, loggedAt])
+}
+
+model Expense {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount      Decimal          @db.Decimal(10, 2)
+  description String
+  rawText     String
+  category    ExpenseCategory?
+  confidence  Float?
+  source      String
+  createdVia  String           @default("telegram")
+  expenseDate DateTime
+  createdAt   DateTime         @default(now())
+
+  @@index([userId, expenseDate])
+}
+
+model WeightLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weight    Decimal  @db.Decimal(5, 2)
+  source    String   @default("dashboard")
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+enum HabitStatus {
+  DONE
+  SKIPPED
+  MISSED
+}
+
+enum LogSource {
+  telegram
+  dashboard
+}
+
+enum ExpenseCategory {
+  GROCERIES
+  FOOD
+  TRANSPORT
+  BILLS
+  SANDS
+  INCOME
+  SHOPPING
+  OTHER
+}
