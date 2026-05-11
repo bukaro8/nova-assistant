@@ -21,10 +21,8 @@
     "telegram:habit:test": "node --env-file=.env --import tsx src/server/telegram/habit-bot.ts --test"
   },
   "engines": {
-
-  "node": "22.12.0"
-
-},
+    "node": ">=22.12.0"
+  },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
     "@prisma/adapter-pg": "^7.8.0",

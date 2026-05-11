@@ -24,21 +24,26 @@ export function WeightTrendChart({ data }: { data: WeightPoint[] }) {
   }
 
   return (
-    <div className="h-36">
+    <div className="h-52 sm:h-56">
       <LineChart
         data={data}
-        margin={{ left: -22, right: 8, top: 16, bottom: 0 }}
+        margin={{ left: -10, right: 10, top: 18, bottom: 4 }}
         responsive
         style={{ width: "100%", height: "100%" }}
       >
-        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="label" tickLine={false} axisLine={false} />
-        <YAxis
-          dataKey="weight"
-          domain={["dataMin - 1", "dataMax + 1"]}
+        <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.55} />
+        <XAxis
+          dataKey="label"
           tickLine={false}
           axisLine={false}
-          width={46}
+          interval="preserveStartEnd"
+        />
+        <YAxis
+          dataKey="weight"
+          domain={["dataMin - 0.5", "dataMax + 0.5"]}
+          tickLine={false}
+          axisLine={false}
+          width={52}
         />
         <Tooltip
           formatter={(value) => [`${Number(value).toFixed(1)} kg`, "Weight"]}
@@ -48,9 +53,9 @@ export function WeightTrendChart({ data }: { data: WeightPoint[] }) {
           type="monotone"
           dataKey="weight"
           stroke="var(--primary)"
-          strokeWidth={3}
-          dot={{ r: 3, fill: "var(--primary)" }}
-          activeDot={{ r: 5 }}
+          strokeWidth={4}
+          dot={{ r: 3, fill: "var(--background)", strokeWidth: 3 }}
+          activeDot={{ r: 6 }}
         />
       </LineChart>
     </div>

@@ -1,0 +1,1 @@
+ALTER TABLE "User" ADD COLUMN "targetWeight" DECIMAL(5,2);

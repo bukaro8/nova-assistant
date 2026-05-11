@@ -12,6 +12,7 @@ model User {
   email                 String        @unique
   name                  String?
   currency              String        @default("GBP")
+  targetWeight          Decimal?      @db.Decimal(5, 2)
   telegramHabitChatId   String?       @unique
   telegramExpenseChatId String?       @unique
   createdAt             DateTime      @default(now())

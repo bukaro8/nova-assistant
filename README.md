@@ -17,7 +17,7 @@ This repository currently contains the project foundation, Telegram habit remind
 
 ## Requirements
 
-- Node.js 20 or newer
+- Node.js 22.12.0 or newer
 - npm
 - Docker Desktop or a compatible Docker runtime
 
@@ -420,6 +420,45 @@ Current dashboard scope:
 - Today's habits with a `Mark Done` action
 - Simple weight log form
 - Settings placeholder
+
+## Coolify Deployment With Dockerfile
+
+NOVA uses a Dockerfile-based deployment so Coolify does not need to infer the Node version with Nixpacks.
+
+The production image uses `node:22.13.1-alpine`, installs dependencies with `npm ci`, runs `npx prisma generate`, builds with `npm run build`, exposes port `3000`, and starts with:
+
+```bash
+npm run start
+```
+
+Build the image locally:
+
+```bash
+docker build -t nova-assistant .
+```
+
+In Coolify:
+
+1. Set the build pack to `Dockerfile`.
+2. Use the repository `Dockerfile`.
+3. Set the app port to `3000`.
+4. Add runtime environment variables in Coolify, not in the image:
+
+```bash
+DATABASE_URL="postgresql://..."
+TELEGRAM_HABIT_BOT_TOKEN="your_botfather_token"
+TELEGRAM_EXPENSE_BOT_TOKEN="your_expense_botfather_token"
+```
+
+Do not commit `.env` or paste secrets into the Dockerfile. `.dockerignore` excludes local environment files from the build context.
+
+The Docker build uses a non-secret placeholder `DATABASE_URL` only while running `next build`, because the Prisma config requires the variable to exist. Coolify must still provide the real `DATABASE_URL` at runtime.
+
+Run production migrations against the Coolify PostgreSQL database from a controlled shell before starting the app after schema changes:
+
+```bash
+npx prisma migrate deploy
+```
 
 ## Useful Commands
 

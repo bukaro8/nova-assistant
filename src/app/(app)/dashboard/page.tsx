@@ -26,9 +26,18 @@ import {
   getHabitColourOption,
   getHabitIconOption,
 } from "@/lib/habits";
+import {
+  formatStreak,
+  formatWeeklyProgress,
+  getHabitStats,
+} from "@/lib/habit-stats";
 import { formatCurrency } from "@/lib/currency";
 import {
-  formatUkDate,
+  findClosestWeightLog,
+  formatWeightChange,
+  getGoalProgress,
+} from "@/lib/weight";
+import {
   formatShortUkDate,
   getCurrentUkWeekRange,
   getUkClock,
@@ -39,10 +48,6 @@ import { requireCurrentUser } from "@/server/dashboard/user";
 import { prisma } from "@/server/db/prisma";
 
 export const dynamic = "force-dynamic";
-
-const DAY_MS = 86_400_000;
-const WEEK_MS = 7 * DAY_MS;
-const WEIGHT_COMPARISON_WINDOW_MS = 3 * DAY_MS;
 
 function categoryLabel(category: string | null) {
   if (!category) {
@@ -96,7 +101,15 @@ export default async function DashboardPage() {
   const week = getCurrentUkWeekRange();
   const clock = getUkClock();
 
-  const [todaysHabits, weekHabits, completedLogs, weeklyHabitLogs, weekExpenses, weightLogs] =
+  const [
+    todaysHabits,
+    weekHabits,
+    completedLogs,
+    weeklyHabitLogs,
+    habitStatsLogs,
+    weekExpenses,
+    weightLogs,
+  ] =
     await Promise.all([
       prisma.habit.findMany({
         where: {
@@ -136,6 +149,12 @@ export default async function DashboardPage() {
           },
         },
       }),
+      prisma.habitLog.findMany({
+        where: {
+          userId: user.id,
+          status: "DONE",
+        },
+      }),
       prisma.expense.findMany({
         where: {
           userId: user.id,
@@ -155,7 +174,7 @@ export default async function DashboardPage() {
         orderBy: {
           createdAt: "desc",
         },
-        take: 14,
+        take: 30,
       }),
     ]);
 
@@ -185,58 +204,73 @@ export default async function DashboardPage() {
   )[0];
   const chartData = getWeekChartDays(week.start);
   const weekStrip = getWeekStrip(week.start);
-  const weightTrendData = weightLogs
+  const trendLogs = weightLogs
     .toReversed()
     .map((log) => ({
-      label: formatShortUkDate(log.createdAt),
       weight: Number(log.weight),
+      createdAt: log.createdAt,
     }));
-  const latestWeight = weightTrendData.at(-1);
-  const latestWeightLog = weightLogs[0];
-  const targetWeightComparisonTime = latestWeightLog
-    ? latestWeightLog.createdAt.getTime() - WEEK_MS
-    : null;
+  const weightTrendData = trendLogs.map((log) => ({
+    label: formatShortUkDate(log.createdAt),
+    weight: log.weight,
+  }));
+  const latestWeight = trendLogs.at(-1) ?? null;
+  const earliestWeight = trendLogs.at(0) ?? null;
   const closestLastWeekWeightLog =
-    latestWeightLog && targetWeightComparisonTime !== null
-      ? weightLogs.slice(1).reduce<(typeof weightLogs)[number] | null>(
-          (closest, log) => {
-            const currentDistance = Math.abs(
-              log.createdAt.getTime() - targetWeightComparisonTime,
-            );
-
-            if (currentDistance > WEIGHT_COMPARISON_WINDOW_MS) {
-              return closest;
-            }
-
-            if (!closest) {
-              return log;
-            }
-
-            const closestDistance = Math.abs(
-              closest.createdAt.getTime() - targetWeightComparisonTime,
-            );
-
-            return currentDistance < closestDistance ? log : closest;
-          },
-          null,
-        )
+    latestWeight && trendLogs.length > 1
+      ? findClosestWeightLog({
+          logs: trendLogs.toReversed(),
+          latest: latestWeight,
+          daysAgo: 7,
+          toleranceDays: 3,
+        })
       : null;
   const weeklyWeightChange =
-    latestWeightLog && closestLastWeekWeightLog
-      ? Number(latestWeightLog.weight) - Number(closestLastWeekWeightLog.weight)
+    latestWeight && closestLastWeekWeightLog
+      ? latestWeight.weight - closestLastWeekWeightLog.weight
       : null;
-  const weeklyWeightChangeLabel =
-    weeklyWeightChange === null
-      ? null
-      : Math.abs(weeklyWeightChange) < 0.05
-        ? "No change"
-        : `${weeklyWeightChange > 0 ? "+" : ""}${weeklyWeightChange.toFixed(
-            1,
-          )} kg vs last week`;
+  const weeklyWeightChangeLabel = formatWeightChange(
+    weeklyWeightChange,
+    "this week",
+  );
+  const targetWeight = user.targetWeight ? Number(user.targetWeight) : null;
+  const goalProgress = getGoalProgress({
+    startWeight: earliestWeight?.weight ?? null,
+    currentWeight: latestWeight?.weight ?? null,
+    targetWeight,
+  });
   const weeklyDoneKeys = new Set(
     weeklyHabitLogs.map(
       (log) => `${log.habitId}:${getUkClock(log.loggedAt).dateKey}`,
     ),
+  );
+  const weekStatDays = weekStrip.map((day) => ({
+    dateKey: day.dateKey,
+    dayCode: day.dayCode,
+  }));
+  const habitStats = weekHabits.map((habit) =>
+    getHabitStats({
+      habit,
+      logs: habitStatsLogs,
+      weekDays: weekStatDays,
+      todayDateKey: today.dateKey,
+    }),
+  );
+  const weeklyCompletionTotal = habitStats.reduce(
+    (total, stats) => total + stats.weeklyTotal,
+    0,
+  );
+  const weeklyCompletionDone = habitStats.reduce(
+    (total, stats) => total + stats.weeklyCompletedCount,
+    0,
+  );
+  const weeklyCompletionPercent =
+    weeklyCompletionTotal === 0
+      ? 0
+      : Math.round((weeklyCompletionDone / weeklyCompletionTotal) * 100);
+  const bestCurrentStreak = Math.max(
+    0,
+    ...habitStats.map((stats) => stats.currentStreak),
   );
 
   for (const expense of positiveExpenses) {
@@ -293,7 +327,13 @@ export default async function DashboardPage() {
                   {score}%
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {doneTotal} of {habitTotal} habits completed today
+                  {doneTotal} complete · {Math.max(0, habitTotal - doneTotal)} pending today
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {weeklyCompletionPercent}% weekly consistency · Best streak{" "}
+                  {bestCurrentStreak > 0
+                    ? `${bestCurrentStreak} days`
+                    : "No streak yet"}
                 </p>
               </div>
             </div>
@@ -314,17 +354,17 @@ export default async function DashboardPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           {weekHabits.map((habit) => {
-            const scheduledDays = weekStrip.filter((day) =>
-              habit.scheduleDays.includes(day.dayCode),
-            );
-            const completeCount = scheduledDays.filter((day) =>
-              weeklyDoneKeys.has(`${habit.id}:${day.dateKey}`),
-            ).length;
             const Icon = getHabitIconOption(habit.icon).icon;
             const colour = getHabitColourOption(habit.colour);
             const scheduledToday = habit.scheduleDays.includes(clock.dayCode);
             const completed = completedToday.has(habit.id);
             const action = toggleHabitDone.bind(null, habit.id, "/dashboard");
+            const stats = getHabitStats({
+              habit,
+              logs: habitStatsLogs,
+              weekDays: weekStatDays,
+              todayDateKey: today.dateKey,
+            });
 
             return (
               <div
@@ -341,7 +381,10 @@ export default async function DashboardPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="truncate font-medium">{habit.name}</div>
                       <div className="text-sm font-semibold">
-                        {completeCount}/{scheduledDays.length}
+                        {formatWeeklyProgress(
+                          stats.weeklyCompletedCount,
+                          stats.weeklyTotal,
+                        )}
                       </div>
                     </div>
                     <div className="mt-2 grid grid-cols-7 gap-1.5">
@@ -364,8 +407,16 @@ export default async function DashboardPage() {
                       })}
                     </div>
                     <div className="mt-2 text-xs text-muted-foreground">
-                      Current streak: Soon
+                      {formatStreak(stats.currentStreak)} · Longest{" "}
+                      {stats.longestStreak > 0
+                        ? `${stats.longestStreak} days`
+                        : "Start today"}
                     </div>
+                    {stats.perfectWeekSoFar ? (
+                      <div className="mt-2 text-xs font-medium text-primary">
+                        Perfect week so far
+                      </div>
+                    ) : null}
                     {scheduledToday ? (
                       <form action={action} className="mt-3">
                         <Button
@@ -428,20 +479,19 @@ export default async function DashboardPage() {
         <CardHeader className="flex-row items-center justify-between gap-3">
           <div>
             <CardTitle>Weight</CardTitle>
-            <CardDescription>Latest check-in</CardDescription>
+            <CardDescription>Current progress</CardDescription>
           </div>
           <Scale className="size-6 text-primary" />
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="flex items-end justify-between gap-3">
             <div>
               <div className="text-4xl font-semibold tracking-tight">
                 {latestWeight ? `${latestWeight.weight.toFixed(1)} kg` : "No data"}
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
-                {latestWeight
-                  ? `Latest log: ${formatUkDate(weightLogs[0].createdAt)}`
-                  : "No weight logs recorded yet."}
+                {weeklyWeightChangeLabel ??
+                  "Add more logs to see your weekly trend."}
               </p>
             </div>
             {weeklyWeightChangeLabel ? (
@@ -456,9 +506,34 @@ export default async function DashboardPage() {
               </div>
             ) : null}
           </div>
-          <div className="mt-4">
-            <WeightTrendChart data={weightTrendData} />
-          </div>
+          {goalProgress && targetWeight ? (
+            <div className="space-y-2 rounded-2xl border border-border bg-background/40 p-3">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-muted-foreground">
+                  {goalProgress.reached
+                    ? "Goal reached"
+                    : `${goalProgress.remaining.toFixed(1)} kg to goal`}
+                </span>
+                <span className="font-medium">
+                  {Math.round(goalProgress.progress)}%
+                </span>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${goalProgress.progress}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
+          <WeightTrendChart data={weightTrendData} />
+          <Link
+            href="/weight"
+            className="flex h-11 items-center justify-center rounded-2xl border border-border bg-background text-sm font-medium transition-colors hover:bg-muted"
+          >
+            View weight
+            <ArrowUpRight className="ml-2 size-4" />
+          </Link>
         </CardContent>
       </Card>
 

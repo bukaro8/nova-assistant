@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  CalendarDays,
   Dumbbell,
   Home,
   ReceiptText,
@@ -19,6 +20,11 @@ const navItems = [
     href: "/dashboard",
     label: "Dashboard",
     icon: Home,
+  },
+  {
+    href: "/today",
+    label: "Today",
+    icon: CalendarDays,
   },
   {
     href: "/habits",
@@ -47,7 +53,7 @@ export function AppBottomNav() {
 
   return (
     <nav className="fixed inset-x-3 bottom-3 z-50 rounded-3xl border border-border bg-card/90 shadow-[0_18px_50px_rgba(0,0,0,0.25)] backdrop-blur-xl md:inset-y-4 md:left-4 md:right-auto md:w-56 md:rounded-3xl">
-      <div className="mx-auto grid h-16 max-w-xl grid-cols-5 md:flex md:h-full md:max-w-none md:flex-col md:gap-1 md:p-3">
+      <div className="mx-auto grid h-16 max-w-xl grid-cols-6 md:flex md:h-full md:max-w-none md:flex-col md:gap-1 md:p-3">
         <div className="hidden px-3 pb-5 pt-2 md:block">
           <NovaBrand />
           <div className="mt-2 text-sm text-muted-foreground">

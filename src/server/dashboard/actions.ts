@@ -76,7 +76,7 @@ function dashboardRedirectMessage({
   type,
   message,
 }: {
-  path: "/dashboard" | "/habits";
+  path: "/dashboard" | "/habits" | "/today";
   type: "success" | "error";
   message: string;
 }): never {
@@ -241,7 +241,7 @@ async function assertValidRepliesDoNotOverlap({
 
 export async function toggleHabitDone(
   habitId: string,
-  redirectPath: "/dashboard" | "/habits",
+  redirectPath: "/dashboard" | "/habits" | "/today",
 ) {
   const user = await requireCurrentUser();
   const { start, end } = getUkDayRange();
@@ -288,6 +288,7 @@ export async function toggleHabitDone(
 
     revalidatePath("/dashboard");
     revalidatePath("/habits");
+    revalidatePath("/today");
     dashboardRedirectMessage({
       path: redirectPath,
       type: "success",
@@ -334,6 +335,7 @@ export async function toggleHabitDone(
 
   revalidatePath("/dashboard");
   revalidatePath("/habits");
+  revalidatePath("/today");
   dashboardRedirectMessage({
     path: redirectPath,
     type: "success",
@@ -368,6 +370,47 @@ export async function saveWeight(formData: FormData) {
 
   revalidatePath("/dashboard");
   revalidatePath("/weight");
+  revalidatePath("/today");
+}
+
+export async function updateWeightGoal(formData: FormData) {
+  const user = await requireCurrentUser();
+  const rawTargetWeight = String(formData.get("targetWeight") ?? "").trim();
+
+  if (!rawTargetWeight) {
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        targetWeight: null,
+      },
+    });
+
+    revalidatePath("/dashboard");
+    revalidatePath("/weight");
+    revalidatePath("/today");
+    return;
+  }
+
+  const targetWeight = Number(rawTargetWeight);
+
+  if (Number.isNaN(targetWeight) || targetWeight <= 0) {
+    return;
+  }
+
+  await prisma.user.update({
+    where: {
+      id: user.id,
+    },
+    data: {
+      targetWeight: rawTargetWeight,
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/weight");
+  revalidatePath("/today");
 }
 
 export async function updateCurrencyPreference(formData: FormData) {
@@ -446,7 +489,39 @@ export async function createExpense(formData: FormData) {
 
   revalidatePath("/dashboard");
   revalidatePath("/expenses");
+  revalidatePath("/today");
   expensesRedirectMessage("success", "Expense saved");
+}
+
+export async function createTodayExpense(formData: FormData) {
+  const user = await requireCurrentUser();
+  const parsed = parseExpenseForm(formData);
+
+  if (!parsed) {
+    dashboardRedirectMessage({
+      path: "/today",
+      type: "error",
+      message: "Invalid expense",
+    });
+  }
+
+  await prisma.expense.create({
+    data: {
+      userId: user.id,
+      ...parsed,
+      source: "dashboard",
+      createdVia: "dashboard",
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/expenses");
+  revalidatePath("/today");
+  dashboardRedirectMessage({
+    path: "/today",
+    type: "success",
+    message: "Expense saved",
+  });
 }
 
 export async function updateExpense(expenseId: string, formData: FormData) {
@@ -467,6 +542,7 @@ export async function updateExpense(expenseId: string, formData: FormData) {
 
   revalidatePath("/dashboard");
   revalidatePath("/expenses");
+  revalidatePath("/today");
   expensesRedirectMessage("success", "Expense updated");
 }
 
@@ -482,6 +558,7 @@ export async function deleteExpense(expenseId: string) {
 
   revalidatePath("/dashboard");
   revalidatePath("/expenses");
+  revalidatePath("/today");
   expensesRedirectMessage("success", "Expense deleted");
 }
 
@@ -521,6 +598,7 @@ export async function createHabit(formData: FormData) {
   revalidatePath("/habits");
   revalidatePath("/settings");
   revalidatePath("/habits/manage");
+  revalidatePath("/today");
   habitRedirectMessage("success", "Habit created");
 }
 
@@ -573,6 +651,7 @@ export async function updateHabit(habitId: string, formData: FormData) {
   revalidatePath("/habits");
   revalidatePath("/settings");
   revalidatePath("/habits/manage");
+  revalidatePath("/today");
   habitRedirectMessage("success", "Habit updated");
 }
 
@@ -592,6 +671,7 @@ export async function disableHabit(habitId: string) {
   revalidatePath("/dashboard");
   revalidatePath("/habits");
   revalidatePath("/habits/manage");
+  revalidatePath("/today");
   habitRedirectMessage("success", "Habit disabled");
 }
 
@@ -611,6 +691,7 @@ export async function setHabitActive(habitId: string, active: boolean) {
   revalidatePath("/dashboard");
   revalidatePath("/habits");
   revalidatePath("/habits/manage");
+  revalidatePath("/today");
   habitRedirectMessage("success", active ? "Habit updated" : "Habit disabled");
 }
 
@@ -651,5 +732,6 @@ export async function deleteHabit(habitId: string) {
   revalidatePath("/dashboard");
   revalidatePath("/habits");
   revalidatePath("/habits/manage");
+  revalidatePath("/today");
   habitRedirectMessage("success", "Habit deleted");
 }
