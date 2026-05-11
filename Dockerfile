@@ -8,6 +8,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npx prisma generate
+RUN cp prisma/schema.prisma prisma/schema.client-js.prisma \
+  && sed -i 's/provider = "prisma-client"/provider = "prisma-client-js"/' prisma/schema.client-js.prisma \
+  && sed -i '/output   = "\.\.\/src\/generated\/prisma"/d' prisma/schema.client-js.prisma \
+  && npx prisma generate --schema prisma/schema.client-js.prisma \
+  && rm prisma/schema.client-js.prisma
 RUN DATABASE_URL="postgresql://nova:nova_password@localhost:5432/nova?schema=public" npm run build
 
 FROM node:22.13.1-alpine AS runner
