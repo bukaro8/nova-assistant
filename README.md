@@ -2,7 +2,7 @@
 
 NOVA is a personal assistant app foundation built with Next.js, TypeScript, Tailwind CSS, shadcn/ui, Prisma, and PostgreSQL.
 
-This repository currently contains the project foundation, Telegram habit reminders/reply logging, and a Telegram expense logging foundation. Authentication, dashboard pages, AI categorisation, charts, and broader business logic are intentionally not implemented yet.
+This repository currently contains the project foundation, Telegram habit reminders/reply logging, dynamic habit management, a Telegram expense logging foundation, and the first mobile dashboard. Authentication, AI categorisation, and broader business logic are intentionally not implemented yet.
 
 ## Tech Stack
 
@@ -101,6 +101,62 @@ npm run dev
 ```
 
 Open http://localhost:3000.
+
+## Dashboard
+
+The app currently runs in Victor-only mode. `src/server/dashboard/user.ts` returns the development user from the database; this is the boundary Auth.js can replace later.
+
+Available pages:
+
+- `/dashboard`
+- `/habits`
+- `/expenses`
+- `/weight`
+- `/settings`
+- `/settings/habits`
+
+## Habit Management
+
+Habits are managed from:
+
+```bash
+http://localhost:3000/settings/habits
+```
+
+From this page you can:
+
+- Add a habit
+- Edit a habit
+- Enable or disable a habit with `active`
+- Delete a habit only when it has no `HabitLog` or `ReminderLog` history
+
+If a habit already has history, NOVA keeps the data and shows:
+
+```text
+This habit has history. Disable it instead.
+```
+
+Habit fields:
+
+- `name`
+- `code`
+- `reminderMessage`
+- `reminderTime`
+- `retryTimes`
+- `validReplies`
+- `scheduleDays`
+- `active`
+
+Validation rules:
+
+- `name` is required
+- `code` is required and unique per user
+- `reminderMessage` is required
+- `reminderTime` is required
+- `validReplies` must contain at least one reply
+- `scheduleDays` must contain at least one day
+
+The Telegram habit listener, reminder scheduler, `/dashboard`, and `/habits` all read from the database habit records. New active habits work without changing code.
 
 ## Database
 
@@ -327,6 +383,38 @@ Try:
 15.48 aldi 01/05/2026
 ```
 
+## Dashboard
+
+The first mobile-first dashboard lives in the App Router and uses server-rendered database reads.
+
+Routes:
+
+- `/dashboard`
+- `/habits`
+- `/expenses`
+- `/weight`
+- `/settings`
+
+The dashboard uses the first seeded user until authentication is added.
+
+Run locally:
+
+```bash
+npm run dev
+```
+
+Then open http://localhost:3000/dashboard.
+
+Current dashboard scope:
+
+- Real habit completion count for today
+- Real weekly expense total
+- Current week spending chart
+- Latest expenses list
+- Today's habits with a `Mark Done` action
+- Simple weight log form
+- Settings placeholder
+
 ## Useful Commands
 
 ```bash
@@ -338,6 +426,7 @@ npm run db:migrate -- --name describe_the_change
 npm run db:generate
 npm run db:seed
 npm run db:studio
+npm run dev
 npm run telegram:expense:test
 npm run telegram:expense
 npm run telegram:habit:test
