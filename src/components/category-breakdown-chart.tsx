@@ -2,6 +2,8 @@
 
 import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts";
 
+import { formatCurrencyShort } from "@/lib/currency";
+
 type CategoryPoint = {
   category: string;
   total: number;
@@ -35,7 +37,7 @@ export function CategoryBreakdownChart({ data }: { data: CategoryPoint[] }) {
           width={96}
         />
         <Tooltip
-          formatter={(value) => [`£${Number(value).toFixed(2)}`, "Spent"]}
+          formatter={(value) => [formatCurrencyShort(Number(value)), "Spent"]}
           cursor={{ fill: "var(--muted)" }}
         />
         <Bar dataKey="total" fill="var(--primary)" radius={[0, 6, 6, 0]} />

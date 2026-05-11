@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { WeeklySpendingChart } from "@/components/weekly-spending-chart";
 import { ExpenseCategory } from "@/generated/prisma/enums";
+import { formatCurrency } from "@/lib/currency";
 import {
   createExpense,
   deleteExpense,
@@ -35,13 +36,6 @@ type SearchParams = Promise<{
 }>;
 
 const categories = Object.values(ExpenseCategory);
-
-function money(value: number) {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-  }).format(value);
-}
 
 function categoryLabel(category: string | null) {
   if (!category) {
@@ -280,19 +274,19 @@ export default async function ExpensesPage({
         <Card>
           <CardHeader>
             <CardTitle>Weekly total</CardTitle>
-            <CardDescription>Current UK week</CardDescription>
+            <CardDescription>This week</CardDescription>
           </CardHeader>
           <CardContent className="text-3xl font-semibold">
-            {money(weeklyTotal)}
+            {formatCurrency(weeklyTotal)}
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
             <CardTitle>Monthly total</CardTitle>
-            <CardDescription>Current UK month</CardDescription>
+            <CardDescription>This month</CardDescription>
           </CardHeader>
           <CardContent className="text-3xl font-semibold">
-            {money(monthlyTotal)}
+            {formatCurrency(monthlyTotal)}
           </CardContent>
         </Card>
       </section>
@@ -320,7 +314,9 @@ export default async function ExpensesPage({
       <Card>
         <CardHeader>
           <CardTitle>Category breakdown</CardTitle>
-          <CardDescription>{money(filteredTotal)} in selected period</CardDescription>
+          <CardDescription>
+            {formatCurrency(filteredTotal)} in selected period
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <CategoryBreakdownChart data={categoryData} />
@@ -359,7 +355,7 @@ export default async function ExpensesPage({
                     </CardDescription>
                   </div>
                   <div className="shrink-0 text-base font-semibold">
-                    {money(Number(expense.amount))}
+                    {formatCurrency(Number(expense.amount))}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">

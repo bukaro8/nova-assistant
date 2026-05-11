@@ -2,6 +2,8 @@ import "dotenv/config";
 
 import { pathToFileURL } from "node:url";
 
+import { formatCurrency } from "@/lib/currency";
+
 import { prisma } from "../db/prisma";
 import {
   requireExpenseBotToken,
@@ -127,10 +129,7 @@ function formatExpenseDate(date: Date) {
 }
 
 function formatMoney(amount: string) {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-  }).format(Number(amount));
+  return formatCurrency(Number(amount));
 }
 
 function toDisplayDescription(description: string) {

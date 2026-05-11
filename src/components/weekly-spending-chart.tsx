@@ -9,6 +9,8 @@ import {
   YAxis,
 } from "recharts";
 
+import { formatCurrencyShort } from "@/lib/currency";
+
 type ChartPoint = {
   label: string;
   total: number;
@@ -37,7 +39,7 @@ export function WeeklySpendingChart({ data }: { data: ChartPoint[] }) {
         <XAxis dataKey="label" tickLine={false} axisLine={false} />
         <YAxis tickLine={false} axisLine={false} width={48} />
         <Tooltip
-          formatter={(value) => [`£${Number(value).toFixed(2)}`, "Spent"]}
+          formatter={(value) => [formatCurrencyShort(Number(value)), "Spent"]}
           cursor={{ fill: "var(--muted)" }}
         />
         <Bar dataKey="total" fill="var(--primary)" radius={[6, 6, 0, 0]} />

@@ -25,6 +25,7 @@ import {
   getHabitColourOption,
   getHabitIconOption,
 } from "@/lib/habits";
+import { formatCurrency } from "@/lib/currency";
 import {
   formatUkDate,
   formatShortUkDate,
@@ -41,13 +42,6 @@ export const dynamic = "force-dynamic";
 const DAY_MS = 86_400_000;
 const WEEK_MS = 7 * DAY_MS;
 const WEIGHT_COMPARISON_WINDOW_MS = 3 * DAY_MS;
-
-function money(value: number) {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-  }).format(value);
-}
 
 function categoryLabel(category: string | null) {
   if (!category) {
@@ -403,7 +397,7 @@ export default async function DashboardPage() {
           <div className="flex items-end justify-between gap-3">
             <div>
               <div className="text-4xl font-semibold tracking-tight">
-                {money(weekTotal)}
+                {formatCurrency(weekTotal)}
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
                 {biggestCategory
@@ -413,7 +407,7 @@ export default async function DashboardPage() {
             </div>
             {biggestCategory ? (
               <div className="rounded-2xl bg-primary/15 px-3 py-2 text-sm font-semibold text-primary">
-                {money(biggestCategory[1])}
+                {formatCurrency(biggestCategory[1])}
               </div>
             ) : null}
           </div>
