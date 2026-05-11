@@ -225,6 +225,7 @@ export default async function ExpensesPage({
   const monthlyTotal = totalSpend(monthExpenses);
   const filteredTotal = totalSpend(filteredExpenses);
   const categoryData = buildCategoryData(filteredExpenses);
+  const biggestCategory = categoryData[0];
   const chartData = getWeekChartDays(week.start);
 
   for (const expense of weekExpenses) {
@@ -254,7 +255,7 @@ export default async function ExpensesPage({
         {[
           ["week", "This week"],
           ["month", "This month"],
-          ["all", "All"],
+          ["all", "All time"],
         ].map(([value, label]) => (
           <Link
             key={value}
@@ -270,10 +271,10 @@ export default async function ExpensesPage({
         ))}
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader>
-            <CardTitle>Weekly total</CardTitle>
+            <CardTitle>This week</CardTitle>
             <CardDescription>This week</CardDescription>
           </CardHeader>
           <CardContent className="text-3xl font-semibold">
@@ -282,11 +283,42 @@ export default async function ExpensesPage({
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Monthly total</CardTitle>
+            <CardTitle>This month</CardTitle>
             <CardDescription>This month</CardDescription>
           </CardHeader>
           <CardContent className="text-3xl font-semibold">
             {formatCurrency(monthlyTotal, user.currency)}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Expenses</CardTitle>
+            <CardDescription>Selected period</CardDescription>
+          </CardHeader>
+          <CardContent className="text-3xl font-semibold">
+            {filteredExpenses.length}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Biggest category</CardTitle>
+            <CardDescription>Selected period</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {biggestCategory ? (
+              <div className="space-y-1">
+                <div className="text-2xl font-semibold">
+                  {biggestCategory.category}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {formatCurrency(biggestCategory.total, user.currency)}
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                No spending yet.
+              </div>
+            )}
           </CardContent>
         </Card>
       </section>

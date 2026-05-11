@@ -33,7 +33,7 @@ export function NovaBrand({ className }: { className?: string }) {
           NOVA
         </span>
       )}
-      <span className="-translate-y-px font-sans text-base font-medium leading-none tracking-[0.14em] text-foreground sm:text-lg">
+      <span className="-ms-8 -translate-y-px font-sans text-base font-medium leading-none tracking-[0.14em] text-foreground sm:text-lg">
         NOVA
       </span>
     </Link>

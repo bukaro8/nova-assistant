@@ -414,6 +414,13 @@ export default async function DashboardPage() {
             ) : null}
           </div>
           <WeeklySpendingChart data={chartData} currency={user.currency} />
+          <Link
+            href="/expenses"
+            className="flex h-11 items-center justify-center rounded-2xl border border-border bg-background text-sm font-medium transition-colors hover:bg-muted"
+          >
+            View expenses
+            <ArrowUpRight className="ml-2 size-4" />
+          </Link>
         </CardContent>
       </Card>
 
