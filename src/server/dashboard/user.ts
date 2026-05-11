@@ -1,9 +1,19 @@
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
+
+import { authOptions } from "@/server/auth/options";
 import { prisma } from "@/server/db/prisma";
 
 export async function getCurrentUser() {
-  return prisma.user.findFirst({
-    orderBy: {
-      createdAt: "asc",
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.id) {
+    return null;
+  }
+
+  return prisma.user.findUnique({
+    where: {
+      id: session.user.id,
     },
   });
 }
@@ -12,7 +22,7 @@ export async function requireCurrentUser() {
   const user = await getCurrentUser();
 
   if (!user) {
-    throw new Error("No user found. Run npm run db:seed first.");
+    redirect("/login");
   }
 
   return user;

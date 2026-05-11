@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ArrowUpRight, Dumbbell, WalletCards } from "lucide-react";
+import { ArrowUpRight, Dumbbell, UserCircle, WalletCards } from "lucide-react";
 
+import { LogoutButton } from "@/components/auth/logout-button";
 import { HabitToast } from "@/components/habit-manage-controls";
 import { Button } from "@/components/ui/button";
 import {
@@ -64,10 +65,10 @@ export default async function SettingsPage() {
         <CardHeader>
           <CardTitle>Settings</CardTitle>
           <CardDescription>
-            Authentication, bot management, and deployment settings will live here later.
+            Account, bot management, and deployment settings will live here.
           </CardDescription>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
           <Link
             href="/habits/manage"
             className="flex min-h-16 items-center justify-between rounded-2xl border border-border bg-background px-4 text-foreground transition-colors hover:bg-muted"
@@ -78,6 +79,16 @@ export default async function SettingsPage() {
             </span>
             <ArrowUpRight className="size-4" />
           </Link>
+          <div className="rounded-2xl border border-border bg-background p-4">
+            <div className="mb-3 flex items-center gap-3 text-foreground">
+              <UserCircle className="size-5 text-primary" />
+              <div>
+                <div className="font-medium">{user.name ?? "NOVA user"}</div>
+                <div className="text-sm text-muted-foreground">{user.email}</div>
+              </div>
+            </div>
+            <LogoutButton />
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -1,5 +1,6 @@
 import "dotenv/config";
 
+import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 
@@ -16,16 +17,19 @@ const allDays = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 const weekdayTrainingDays = ["MON", "TUE", "WED", "THU"];
 
 async function main() {
+  const passwordHash = await bcrypt.hash("password123", 12);
   const user = await prisma.user.upsert({
     where: {
       email: "victor@example.com",
     },
     update: {
       name: "Victor",
+      passwordHash,
     },
     create: {
       name: "Victor",
       email: "victor@example.com",
+      passwordHash,
     },
   });
 

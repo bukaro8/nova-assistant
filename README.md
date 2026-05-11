@@ -3,11 +3,12 @@
 NOVA is a personal assistant app foundation built with Next.js, TypeScript, Tailwind CSS, shadcn/ui, Prisma, and PostgreSQL.
 
 
-This repository currently contains the project foundation, Telegram habit reminders/reply logging, dynamic habit management, a Telegram expense logging foundation, and the first mobile dashboard. Authentication, AI categorisation, and broader business logic are intentionally not implemented yet.
+This repository currently contains the project foundation, Auth.js email/password authentication, Telegram habit reminders/reply logging, dynamic habit management, a Telegram expense logging foundation, and the mobile dashboard. AI categorisation and broader business logic are intentionally not implemented yet.
 
 ## Tech Stack
 
 - Next.js App Router
+- Auth.js / NextAuth credentials authentication
 - TypeScript
 - Tailwind CSS
 - shadcn/ui
@@ -59,7 +60,7 @@ Generate the Prisma client:
 npm run db:generate
 ```
 
-Seed the database with development data:
+Optionally seed the database with development demo data:
 
 ```bash
 npm run db:seed
@@ -105,16 +106,60 @@ Open http://localhost:3000.
 
 ## Dashboard
 
-The app currently runs in Victor-only mode. `src/server/dashboard/user.ts` returns the development user from the database; this is the boundary Auth.js can replace later.
+Dashboard routes require login. `src/server/dashboard/user.ts` reads the logged-in Auth.js session user and no longer depends on a seeded Victor user.
 
 Available pages:
 
+- `/login`
+- `/register`
+- `/logout`
 - `/dashboard`
+- `/today`
 - `/habits`
 - `/expenses`
 - `/weight`
 - `/settings`
 - `/habits/manage`
+
+## Authentication
+
+NOVA uses Auth.js / NextAuth credentials authentication.
+
+Register at:
+
+```bash
+http://localhost:3000/register
+```
+
+Sign in at:
+
+```bash
+http://localhost:3000/login
+```
+
+Registration requires:
+
+- `name`
+- `email`
+- `password`
+
+Passwords are hashed with `bcryptjs` and stored in `User.passwordHash`. Plain text passwords are never stored.
+
+Protected routes redirect unauthenticated users to `/login`:
+
+- `/dashboard`
+- `/today`
+- `/habits`
+- `/expenses`
+- `/weight`
+- `/settings`
+
+Set an auth secret in `.env`:
+
+```bash
+AUTH_SECRET="generate_a_long_random_secret"
+NEXTAUTH_URL="http://localhost:3000"
+```
 
 ## Habit Management
 
@@ -176,6 +221,8 @@ Required local environment variables:
 
 ```bash
 DATABASE_URL="postgresql://nova:nova_password@localhost:5432/nova?schema=public"
+AUTH_SECRET="generate_a_long_random_secret"
+NEXTAUTH_URL="http://localhost:3000"
 TELEGRAM_HABIT_BOT_TOKEN="your_botfather_token"
 TELEGRAM_EXPENSE_BOT_TOKEN="your_expense_botfather_token"
 ```
@@ -192,7 +239,7 @@ This applies the migration locally and regenerates the Prisma client.
 
 ### Seed Data
 
-The seed script is `prisma/seed.ts`. It creates a development user and the initial habit definitions:
+The seed script is optional for local demo data. It creates a development user and the initial habit definitions:
 
 - Dutasteride
 - Walk
@@ -204,6 +251,13 @@ Run it with:
 
 ```bash
 npm run db:seed
+```
+
+Demo login after seeding:
+
+```text
+victor@example.com
+password123
 ```
 
 ### Prisma Studio
@@ -258,7 +312,7 @@ The listener uses Telegram polling via `getUpdates`.
 
 Standalone Telegram scripts load `.env` through Node's `--env-file=.env` flag.
 
-When the first valid reply arrives, NOVA saves the Telegram chat ID to the seeded user if `telegramHabitChatId` is empty.
+When the first valid reply arrives, NOVA saves the Telegram chat ID to the first unclaimed user if `telegramHabitChatId` is empty. A proper Telegram connect flow will be added later.
 
 ### Start Reminder Scheduler
 
@@ -339,7 +393,7 @@ This calls Telegram `getMe` for `TELEGRAM_EXPENSE_BOT_TOKEN`.
 npm run telegram:expense
 ```
 
-When the first valid expense arrives, NOVA saves the Telegram chat ID to the seeded user if `telegramExpenseChatId` is empty.
+When the first valid expense arrives, NOVA saves the Telegram chat ID to the first unclaimed user if `telegramExpenseChatId` is empty. A proper Telegram connect flow will be added later.
 
 ### Expense Message Formats
 
@@ -396,12 +450,13 @@ The first mobile-first dashboard lives in the App Router and uses server-rendere
 Routes:
 
 - `/dashboard`
+- `/today`
 - `/habits`
 - `/expenses`
 - `/weight`
 - `/settings`
 
-The dashboard uses the first seeded user until authentication is added.
+The dashboard uses the logged-in Auth.js user.
 
 Run locally:
 

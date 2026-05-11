@@ -1,6 +1,13 @@
 import Link from "next/link";
+import { getServerSession } from "next-auth";
 
-export default function Home() {
+import { authOptions } from "@/server/auth/options";
+
+export default async function Home() {
+  const session = await getServerSession(authOptions);
+  const primaryHref = session?.user?.id ? "/dashboard" : "/login";
+  const primaryLabel = session?.user?.id ? "Open dashboard" : "Sign in";
+
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
       <div className="w-full max-w-md space-y-4 text-center">
@@ -12,11 +19,19 @@ export default function Home() {
           Project foundation is ready for the next implementation phase.
         </p>
         <Link
-          href="/dashboard"
+          href={primaryHref}
           className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
         >
-          Open dashboard
+          {primaryLabel}
         </Link>
+        {!session?.user?.id ? (
+          <div className="text-sm text-muted-foreground">
+            New here?{" "}
+            <Link className="font-medium text-foreground underline" href="/register">
+              Create an account
+            </Link>
+          </div>
+        ) : null}
       </div>
     </main>
   );
