@@ -1,14 +1,7 @@
 import Link from "next/link";
 import {
-  Activity,
   ArrowUpRight,
-  CheckCircle2,
-  CircleDot,
   Dumbbell,
-  Footprints,
-  GraduationCap,
-  Moon,
-  Pill,
   Plus,
   ReceiptText,
   Scale,
@@ -22,9 +15,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { HabitToast } from "@/components/habit-manage-controls";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { WeeklySpendingChart } from "@/components/weekly-spending-chart";
 import { WeightTrendChart } from "@/components/weight-trend-chart";
+import { toggleHabitDone } from "@/server/dashboard/actions";
+import {
+  getHabitColourOption,
+  getHabitIconOption,
+} from "@/lib/habits";
 import {
   formatUkDate,
   formatShortUkDate,
@@ -47,6 +47,14 @@ function money(value: number) {
     style: "currency",
     currency: "GBP",
   }).format(value);
+}
+
+function categoryLabel(category: string | null) {
+  if (!category) {
+    return "Uncategorised";
+  }
+
+  return category.charAt(0) + category.slice(1).toLowerCase();
 }
 
 function getGreeting() {
@@ -85,45 +93,6 @@ function getWeekStrip(start: Date) {
       active: clock.dateKey === getUkClock().dateKey,
     };
   });
-}
-
-const habitIconStyles = [
-  {
-    icon: CircleDot,
-    className: "bg-emerald-400/18 text-emerald-300",
-  },
-  {
-    icon: CheckCircle2,
-    className: "bg-sky-400/18 text-sky-300",
-  },
-  {
-    icon: Activity,
-    className: "bg-lime-400/18 text-lime-300",
-  },
-  {
-    icon: Footprints,
-    className: "bg-orange-400/18 text-orange-300",
-  },
-  {
-    icon: GraduationCap,
-    className: "bg-violet-400/18 text-violet-300",
-  },
-  {
-    icon: Pill,
-    className: "bg-rose-400/18 text-rose-300",
-  },
-  {
-    icon: Moon,
-    className: "bg-indigo-400/18 text-indigo-300",
-  },
-] as const;
-
-function getHabitIcon(seed: string) {
-  const index =
-    Array.from(seed).reduce((total, character) => total + character.charCodeAt(0), 0) %
-    habitIconStyles.length;
-
-  return habitIconStyles[index];
 }
 
 export default async function DashboardPage() {
@@ -206,6 +175,19 @@ export default async function DashboardPage() {
     (total, expense) => total + Number(expense.amount),
     0,
   );
+  const categoryTotals = new Map<string, number>();
+
+  for (const expense of positiveExpenses) {
+    const category = categoryLabel(expense.category);
+    categoryTotals.set(
+      category,
+      (categoryTotals.get(category) ?? 0) + Number(expense.amount),
+    );
+  }
+
+  const biggestCategory = Array.from(categoryTotals.entries()).sort(
+    (a, b) => b[1] - a[1],
+  )[0];
   const chartData = getWeekChartDays(week.start);
   const weekStrip = getWeekStrip(week.start);
   const weightTrendData = weightLogs
@@ -273,6 +255,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-5">
+      <HabitToast />
       <header className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">{getGreeting()}</p>
@@ -341,7 +324,11 @@ export default async function DashboardPage() {
             const completeCount = scheduledDays.filter((day) =>
               weeklyDoneKeys.has(`${habit.id}:${day.dateKey}`),
             ).length;
-            const { icon: Icon, className } = getHabitIcon(habit.id);
+            const Icon = getHabitIconOption(habit.icon).icon;
+            const colour = getHabitColourOption(habit.colour);
+            const scheduledToday = habit.scheduleDays.includes(clock.dayCode);
+            const completed = completedToday.has(habit.id);
+            const action = toggleHabitDone.bind(null, habit.id, "/dashboard");
 
             return (
               <div
@@ -350,7 +337,7 @@ export default async function DashboardPage() {
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className={`grid size-11 shrink-0 place-items-center rounded-2xl ${className}`}
+                    className={`grid size-11 shrink-0 place-items-center rounded-2xl ${colour.icon}`}
                   >
                     <Icon className="size-5" />
                   </div>
@@ -371,7 +358,7 @@ export default async function DashboardPage() {
                             key={`${habit.id}-${day.dateKey}`}
                             className={`h-2 rounded-full ${
                               done
-                                ? "bg-primary"
+                                ? colour.progress
                                 : scheduled
                                   ? "bg-muted"
                                   : "bg-transparent"
@@ -383,6 +370,17 @@ export default async function DashboardPage() {
                     <div className="mt-2 text-xs text-muted-foreground">
                       Current streak: Soon
                     </div>
+                    {scheduledToday ? (
+                      <form action={action} className="mt-3">
+                        <Button
+                          className="h-10 w-full rounded-2xl"
+                          type="submit"
+                          variant={completed ? "outline" : "default"}
+                        >
+                          {completed ? "Undo" : "Mark done"}
+                        </Button>
+                      </form>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -402,8 +400,22 @@ export default async function DashboardPage() {
           <ReceiptText className="size-6 text-primary" />
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="text-4xl font-semibold tracking-tight">
-            {money(weekTotal)}
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <div className="text-4xl font-semibold tracking-tight">
+                {money(weekTotal)}
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {biggestCategory
+                  ? `Biggest category: ${biggestCategory[0]}`
+                  : "No spending recorded this week."}
+              </p>
+            </div>
+            {biggestCategory ? (
+              <div className="rounded-2xl bg-primary/15 px-3 py-2 text-sm font-semibold text-primary">
+                {money(biggestCategory[1])}
+              </div>
+            ) : null}
           </div>
           <WeeklySpendingChart data={chartData} />
         </CardContent>

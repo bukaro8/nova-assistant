@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { CheckCircle2, Circle } from "lucide-react";
 
-import { markHabitDone } from "@/server/dashboard/actions";
+import { toggleHabitDone } from "@/server/dashboard/actions";
+import { HabitToast } from "@/components/habit-manage-controls";
+import {
+  getHabitColourOption,
+  getHabitIconOption,
+} from "@/lib/habits";
 import { getUkClock, getUkDayRange } from "@/server/dashboard/date-utils";
 import { requireCurrentUser } from "@/server/dashboard/user";
 import { prisma } from "@/server/db/prisma";
@@ -47,6 +52,7 @@ export default async function HabitsPage() {
 
   return (
     <div className="space-y-5">
+      <HabitToast />
       <header className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">{clock.dayCode}</p>
@@ -72,16 +78,25 @@ export default async function HabitsPage() {
         <section className="space-y-3">
           {habits.map((habit) => {
             const completed = habit.logs.length > 0;
-            const action = markHabitDone.bind(null, habit.id);
+            const action = toggleHabitDone.bind(null, habit.id, "/habits");
+            const Icon = getHabitIconOption(habit.icon).icon;
+            const colour = getHabitColourOption(habit.colour);
 
             return (
               <Card key={habit.id}>
                 <CardHeader className="flex-row items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <CardTitle>{habit.name}</CardTitle>
-                    <CardDescription>
-                      {habit.reminderTime} · Reply: {habit.code}
-                    </CardDescription>
+                  <div className="flex min-w-0 gap-3">
+                    <div
+                      className={`grid size-11 shrink-0 place-items-center rounded-2xl ${colour.icon}`}
+                    >
+                      <Icon className="size-5" />
+                    </div>
+                    <div className="min-w-0 space-y-1">
+                      <CardTitle className="truncate">{habit.name}</CardTitle>
+                      <CardDescription>
+                        {habit.reminderTime} · Reply: {habit.code}
+                      </CardDescription>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 text-sm">
                     {completed ? (
@@ -97,9 +112,9 @@ export default async function HabitsPage() {
                     <Button
                       className="h-11 w-full"
                       type="submit"
-                      disabled={completed}
+                      variant={completed ? "outline" : "default"}
                     >
-                      Mark Done
+                      {completed ? "Undo" : "Mark done"}
                     </Button>
                   </form>
                 </CardContent>

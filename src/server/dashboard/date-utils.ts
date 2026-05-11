@@ -142,6 +142,19 @@ export function getCurrentUkWeekRange(date = new Date()) {
   return { start, end, mondayDateKey };
 }
 
+export function getCurrentUkMonthRange(date = new Date()) {
+  const today = getUkClock(date);
+  const { year, month } = parseDateKey(today.dateKey);
+  const monthDateKey = `${year}-${String(month).padStart(2, "0")}-01`;
+  const start = getUtcForUkLocal(monthDateKey, "00:00");
+  const nextMonthDateKey = getUkClock(
+    new Date(Date.UTC(year, month, 1, 12)),
+  ).dateKey;
+  const end = getUtcForUkLocal(nextMonthDateKey, "00:00");
+
+  return { start, end, monthDateKey };
+}
+
 export function getWeekChartDays(start: Date) {
   return Array.from({ length: 7 }, (_, index) => {
     const date = new Date(start.getTime() + index * DAY_MS);

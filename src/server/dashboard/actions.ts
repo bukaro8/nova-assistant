@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { prisma } from "@/server/db/prisma";
+import { ExpenseCategory } from "@/generated/prisma/enums";
+import {
+  isHabitColourValue,
+  isHabitIconValue,
+} from "@/lib/habits";
 import {
   getUkDayRange,
   getUtcForUkDateInput,
@@ -17,6 +22,8 @@ type HabitFormData = {
   name: string;
   code: string;
   reminderMessage: string;
+  icon: string;
+  colour: string;
   reminderTime: string;
   retryTimes: string[];
   validReplies: string[];
@@ -63,10 +70,34 @@ function habitRedirectMessage(type: "success" | "error", message: string): never
   redirect(`/habits/manage?${params.toString()}`);
 }
 
+function dashboardRedirectMessage({
+  path,
+  type,
+  message,
+}: {
+  path: "/dashboard" | "/habits";
+  type: "success" | "error";
+  message: string;
+}): never {
+  const params = new URLSearchParams({ type, message });
+  redirect(`${path}?${params.toString()}`);
+}
+
+function expensesRedirectMessage(type: "success" | "error", message: string): never {
+  const params = new URLSearchParams({ type, message });
+  redirect(`/expenses?${params.toString()}`);
+}
+
+function invalidForm(message = "Invalid form"): never {
+  habitRedirectMessage("error", message);
+}
+
 function parseHabitForm(formData: FormData): ParsedHabitForm {
   const name = String(formData.get("name") ?? "").trim();
   const code = normaliseCode(formData.get("code"));
   const reminderMessage = String(formData.get("reminderMessage") ?? "").trim();
+  const icon = String(formData.get("icon") ?? "circle").trim();
+  const colour = String(formData.get("colour") ?? "emerald").trim();
   const reminderTime = normaliseTime(formData.get("reminderTime"));
   const retryTimes = parseList(formData.get("retryTimes"));
   const validReplies = parseList(formData.get("validReplies"));
@@ -74,23 +105,27 @@ function parseHabitForm(formData: FormData): ParsedHabitForm {
   const active = formData.get("active") === "on";
 
   if (!name) {
-    return { ok: false, error: "Name is required." };
+    return { ok: false, error: "Invalid form" };
   }
 
   if (!code) {
-    return { ok: false, error: "Code is required." };
+    return { ok: false, error: "Invalid form" };
   }
 
   if (!reminderTime) {
-    return { ok: false, error: "Reminder time is required." };
+    return { ok: false, error: "Invalid form" };
   }
 
   if (!reminderMessage) {
-    return { ok: false, error: "Reminder message is required." };
+    return { ok: false, error: "Invalid form" };
+  }
+
+  if (!isHabitIconValue(icon) || !isHabitColourValue(colour)) {
+    return { ok: false, error: "Invalid form" };
   }
 
   if (!TIME_PATTERN.test(reminderTime)) {
-    return { ok: false, error: "Reminder time must use HH:mm format." };
+    return { ok: false, error: "Invalid form" };
   }
 
   const invalidRetryTime = retryTimes.find((time) => !TIME_PATTERN.test(time));
@@ -98,16 +133,16 @@ function parseHabitForm(formData: FormData): ParsedHabitForm {
   if (invalidRetryTime) {
     return {
       ok: false,
-      error: `Retry time "${invalidRetryTime}" must use HH:mm format.`,
+      error: "Invalid form",
     };
   }
 
   if (validReplies.length === 0) {
-    return { ok: false, error: "At least one valid reply is required." };
+    return { ok: false, error: "Invalid form" };
   }
 
   if (scheduleDays.length === 0) {
-    return { ok: false, error: "At least one schedule day is required." };
+    return { ok: false, error: "Invalid form" };
   }
 
   return {
@@ -116,6 +151,8 @@ function parseHabitForm(formData: FormData): ParsedHabitForm {
       name,
       code,
       reminderMessage,
+      icon,
+      colour,
       reminderTime,
       retryTimes,
       validReplies,
@@ -134,15 +171,101 @@ function isUniqueConstraintError(error: unknown) {
   );
 }
 
-export async function markHabitDone(habitId: string) {
+async function assertHabitCodeIsUnique({
+  userId,
+  code,
+  excludeHabitId,
+}: {
+  userId: string;
+  code: string;
+  excludeHabitId?: string;
+}) {
+  const existing = await prisma.habit.findFirst({
+    where: {
+      userId,
+      code,
+      ...(excludeHabitId
+        ? {
+            id: {
+              not: excludeHabitId,
+            },
+          }
+        : {}),
+    },
+  });
+
+  if (existing) {
+    habitRedirectMessage("error", "Duplicate code");
+  }
+}
+
+async function assertValidRepliesDoNotOverlap({
+  userId,
+  validReplies,
+  excludeHabitId,
+}: {
+  userId: string;
+  validReplies: string[];
+  excludeHabitId?: string;
+}) {
+  const normalizedReplies = new Set(
+    validReplies.map((reply) => reply.trim().toLowerCase()),
+  );
+  const habits = await prisma.habit.findMany({
+    where: {
+      userId,
+      ...(excludeHabitId
+        ? {
+            id: {
+              not: excludeHabitId,
+            },
+          }
+        : {}),
+    },
+    select: {
+      name: true,
+      validReplies: true,
+    },
+  });
+  const overlappingHabit = habits.find((habit) =>
+    habit.validReplies.some((reply) =>
+      normalizedReplies.has(reply.trim().toLowerCase()),
+    ),
+  );
+
+  if (overlappingHabit) {
+    invalidForm("Invalid form");
+  }
+}
+
+export async function toggleHabitDone(
+  habitId: string,
+  redirectPath: "/dashboard" | "/habits",
+) {
   const user = await requireCurrentUser();
   const { start, end } = getUkDayRange();
   const loggedAt = new Date();
+  const habit = await prisma.habit.findFirst({
+    where: {
+      id: habitId,
+      userId: user.id,
+      active: true,
+    },
+  });
+
+  if (!habit) {
+    dashboardRedirectMessage({
+      path: redirectPath,
+      type: "error",
+      message: "Invalid form",
+    });
+  }
 
   const existingLog = await prisma.habitLog.findFirst({
     where: {
       userId: user.id,
       habitId,
+      status: "DONE",
       loggedAt: {
         gte: start,
         lt: end,
@@ -151,9 +274,44 @@ export async function markHabitDone(habitId: string) {
   });
 
   if (existingLog) {
+    await prisma.habitLog.deleteMany({
+      where: {
+        userId: user.id,
+        habitId,
+        loggedAt: {
+          gte: start,
+          lt: end,
+        },
+      },
+    });
+
+    revalidatePath("/dashboard");
+    revalidatePath("/habits");
+    dashboardRedirectMessage({
+      path: redirectPath,
+      type: "success",
+      message: "Habit unmarked",
+    });
+  }
+
+  const skippedLog = await prisma.habitLog.findFirst({
+    where: {
+      userId: user.id,
+      habitId,
+      status: {
+        not: "DONE",
+      },
+      loggedAt: {
+        gte: start,
+        lt: end,
+      },
+    },
+  });
+
+  if (skippedLog) {
     await prisma.habitLog.update({
       where: {
-        id: existingLog.id,
+        id: skippedLog.id,
       },
       data: {
         status: "DONE",
@@ -175,6 +333,15 @@ export async function markHabitDone(habitId: string) {
 
   revalidatePath("/dashboard");
   revalidatePath("/habits");
+  dashboardRedirectMessage({
+    path: redirectPath,
+    type: "success",
+    message: "Habit marked done",
+  });
+}
+
+export async function markHabitDone(habitId: string) {
+  await toggleHabitDone(habitId, "/habits");
 }
 
 export async function saveWeight(formData: FormData) {
@@ -202,13 +369,105 @@ export async function saveWeight(formData: FormData) {
   revalidatePath("/weight");
 }
 
+function parseExpenseForm(formData: FormData) {
+  const rawAmount = String(formData.get("amount") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const category = String(formData.get("category") ?? "").trim();
+  const rawDate = String(formData.get("date") ?? "").trim();
+  const amount = Number(rawAmount);
+
+  if (
+    !rawAmount ||
+    Number.isNaN(amount) ||
+    !description ||
+    !Object.values(ExpenseCategory).includes(category as ExpenseCategory)
+  ) {
+    return null;
+  }
+
+  return {
+    amount: rawAmount,
+    description,
+    rawText: description,
+    category: category as ExpenseCategory,
+    expenseDate: rawDate ? getUtcForUkDateInput(rawDate) : new Date(),
+  };
+}
+
+export async function createExpense(formData: FormData) {
+  const user = await requireCurrentUser();
+  const parsed = parseExpenseForm(formData);
+
+  if (!parsed) {
+    expensesRedirectMessage("error", "Invalid expense");
+  }
+
+  await prisma.expense.create({
+    data: {
+      userId: user.id,
+      ...parsed,
+      source: "dashboard",
+      createdVia: "dashboard",
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/expenses");
+  expensesRedirectMessage("success", "Expense saved");
+}
+
+export async function updateExpense(expenseId: string, formData: FormData) {
+  const user = await requireCurrentUser();
+  const parsed = parseExpenseForm(formData);
+
+  if (!parsed) {
+    expensesRedirectMessage("error", "Invalid expense");
+  }
+
+  await prisma.expense.updateMany({
+    where: {
+      id: expenseId,
+      userId: user.id,
+    },
+    data: parsed,
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/expenses");
+  expensesRedirectMessage("success", "Expense updated");
+}
+
+export async function deleteExpense(expenseId: string) {
+  const user = await requireCurrentUser();
+
+  await prisma.expense.deleteMany({
+    where: {
+      id: expenseId,
+      userId: user.id,
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/expenses");
+  expensesRedirectMessage("success", "Expense deleted");
+}
+
 export async function createHabit(formData: FormData) {
   const user = await requireCurrentUser();
   const parsed = parseHabitForm(formData);
 
   if (!parsed.ok) {
-    habitRedirectMessage("error", parsed.error);
+    invalidForm(parsed.error);
   }
+
+  await assertHabitCodeIsUnique({
+    userId: user.id,
+    code: parsed.data.code,
+  });
+  await assertValidRepliesDoNotOverlap({
+    userId: user.id,
+    validReplies: parsed.data.validReplies,
+  });
 
   try {
     await prisma.habit.create({
@@ -219,7 +478,7 @@ export async function createHabit(formData: FormData) {
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
-      habitRedirectMessage("error", "A habit with this code already exists.");
+      habitRedirectMessage("error", "Duplicate code");
     }
 
     throw error;
@@ -229,7 +488,7 @@ export async function createHabit(formData: FormData) {
   revalidatePath("/habits");
   revalidatePath("/settings");
   revalidatePath("/habits/manage");
-  habitRedirectMessage("success", "Habit added.");
+  habitRedirectMessage("success", "Habit created");
 }
 
 export async function updateHabit(habitId: string, formData: FormData) {
@@ -237,7 +496,7 @@ export async function updateHabit(habitId: string, formData: FormData) {
   const parsed = parseHabitForm(formData);
 
   if (!parsed.ok) {
-    habitRedirectMessage("error", parsed.error);
+    invalidForm(parsed.error);
   }
 
   const habit = await prisma.habit.findFirst({
@@ -248,8 +507,19 @@ export async function updateHabit(habitId: string, formData: FormData) {
   });
 
   if (!habit) {
-    habitRedirectMessage("error", "Habit not found.");
+    invalidForm("Invalid form");
   }
+
+  await assertHabitCodeIsUnique({
+    userId: user.id,
+    code: parsed.data.code,
+    excludeHabitId: habitId,
+  });
+  await assertValidRepliesDoNotOverlap({
+    userId: user.id,
+    validReplies: parsed.data.validReplies,
+    excludeHabitId: habitId,
+  });
 
   try {
     await prisma.habit.update({
@@ -260,7 +530,7 @@ export async function updateHabit(habitId: string, formData: FormData) {
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
-      habitRedirectMessage("error", "A habit with this code already exists.");
+      habitRedirectMessage("error", "Duplicate code");
     }
 
     throw error;
@@ -270,7 +540,7 @@ export async function updateHabit(habitId: string, formData: FormData) {
   revalidatePath("/habits");
   revalidatePath("/settings");
   revalidatePath("/habits/manage");
-  habitRedirectMessage("success", "Habit updated.");
+  habitRedirectMessage("success", "Habit updated");
 }
 
 export async function disableHabit(habitId: string) {
@@ -289,7 +559,26 @@ export async function disableHabit(habitId: string) {
   revalidatePath("/dashboard");
   revalidatePath("/habits");
   revalidatePath("/habits/manage");
-  habitRedirectMessage("success", "Habit disabled.");
+  habitRedirectMessage("success", "Habit disabled");
+}
+
+export async function setHabitActive(habitId: string, active: boolean) {
+  const user = await requireCurrentUser();
+
+  await prisma.habit.updateMany({
+    where: {
+      id: habitId,
+      userId: user.id,
+    },
+    data: {
+      active,
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/habits");
+  revalidatePath("/habits/manage");
+  habitRedirectMessage("success", active ? "Habit updated" : "Habit disabled");
 }
 
 export async function deleteHabit(habitId: string) {
@@ -310,13 +599,13 @@ export async function deleteHabit(habitId: string) {
   });
 
   if (!habit) {
-    habitRedirectMessage("error", "Habit not found.");
+    invalidForm("Invalid form");
   }
 
   if (habit._count.logs > 0 || habit._count.reminderLogs > 0) {
     habitRedirectMessage(
       "error",
-      "This habit has history. Disable it instead.",
+      "Delete blocked because history exists",
     );
   }
 
@@ -329,5 +618,5 @@ export async function deleteHabit(habitId: string) {
   revalidatePath("/dashboard");
   revalidatePath("/habits");
   revalidatePath("/habits/manage");
-  habitRedirectMessage("success", "Habit deleted.");
+  habitRedirectMessage("success", "Habit deleted");
 }

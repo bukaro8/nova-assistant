@@ -1,0 +1,2 @@
+ALTER TABLE "Habit" ADD COLUMN "icon" TEXT NOT NULL DEFAULT 'circle';
+ALTER TABLE "Habit" ADD COLUMN "colour" TEXT NOT NULL DEFAULT 'emerald';

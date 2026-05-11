@@ -133,7 +133,7 @@ From this page you can:
 If a habit already has history, NOVA keeps the data and shows:
 
 ```text
-This habit has history. Disable it instead.
+Delete blocked because history exists
 ```
 
 Habit fields:
@@ -141,6 +141,8 @@ Habit fields:
 - `name`
 - `code`
 - `reminderMessage`
+- `icon`
+- `colour`
 - `reminderTime`
 - `retryTimes`
 - `validReplies`
@@ -152,8 +154,11 @@ Validation rules:
 - `name` is required
 - `code` is required and unique per user
 - `reminderMessage` is required
+- `icon` must be one of the configured habit icons
+- `colour` must be one of the configured habit colours
 - `reminderTime` is required
 - `validReplies` must contain at least one reply
+- `validReplies` cannot overlap with another habit for the same user
 - `scheduleDays` must contain at least one day
 
 The Telegram habit listener, reminder scheduler, `/dashboard`, and `/habits` all read from the database habit records. New active habits work without changing code.

@@ -30,6 +30,8 @@ model Habit {
   active          Boolean       @default(true)
   reminderTime    String
   reminderMessage String
+  icon            String        @default("circle")
+  colour          String        @default("emerald")
   validReplies    String[]
   retryTimes      String[]
   scheduleDays    String[]

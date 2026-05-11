@@ -1,3 +1,8 @@
+import Link from "next/link";
+
+import { CategoryBreakdownChart } from "@/components/category-breakdown-chart";
+import { HabitToast } from "@/components/habit-manage-controls";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -5,11 +10,31 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatUkDate } from "@/server/dashboard/date-utils";
+import { WeeklySpendingChart } from "@/components/weekly-spending-chart";
+import { ExpenseCategory } from "@/generated/prisma/enums";
+import {
+  createExpense,
+  deleteExpense,
+  updateExpense,
+} from "@/server/dashboard/actions";
+import {
+  formatUkDate,
+  getCurrentUkMonthRange,
+  getCurrentUkWeekRange,
+  getUkClock,
+  getWeekChartDays,
+} from "@/server/dashboard/date-utils";
 import { requireCurrentUser } from "@/server/dashboard/user";
 import { prisma } from "@/server/db/prisma";
 
 export const dynamic = "force-dynamic";
+
+type ExpenseFilter = "week" | "month" | "all";
+type SearchParams = Promise<{
+  filter?: string;
+}>;
+
+const categories = Object.values(ExpenseCategory);
 
 function money(value: number) {
   return new Intl.NumberFormat("en-GB", {
@@ -26,53 +51,345 @@ function categoryLabel(category: string | null) {
   return category.charAt(0) + category.slice(1).toLowerCase();
 }
 
-export default async function ExpensesPage() {
+function getFilter(value: string | undefined): ExpenseFilter {
+  if (value === "month" || value === "all") {
+    return value;
+  }
+
+  return "week";
+}
+
+function totalSpend(
+  expenses: Array<{
+    amount: unknown;
+  }>,
+) {
+  return expenses
+    .filter((expense) => Number(expense.amount) > 0)
+    .reduce((total, expense) => total + Number(expense.amount), 0);
+}
+
+function buildCategoryData(
+  expenses: Array<{
+    amount: unknown;
+    category: string | null;
+  }>,
+) {
+  const totals = new Map<string, number>();
+
+  for (const expense of expenses) {
+    const amount = Number(expense.amount);
+
+    if (amount <= 0) {
+      continue;
+    }
+
+    const category = categoryLabel(expense.category);
+    totals.set(category, (totals.get(category) ?? 0) + amount);
+  }
+
+  return Array.from(totals.entries())
+    .map(([category, total]) => ({ category, total }))
+    .sort((a, b) => b.total - a.total);
+}
+
+function dateInputValue(date: Date) {
+  return getUkClock(date).dateKey;
+}
+
+function ExpenseForm({
+  action,
+  submitLabel,
+  expense,
+}: {
+  action: (formData: FormData) => void | Promise<void>;
+  submitLabel: string;
+  expense?: {
+    amount: unknown;
+    description: string;
+    category: string | null;
+    expenseDate: Date;
+  };
+}) {
+  return (
+    <form action={action} className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="text-sm font-medium">
+          Amount
+          <input
+            className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+            name="amount"
+            type="number"
+            step="0.01"
+            required
+            defaultValue={
+              expense ? Number(expense.amount).toFixed(2) : undefined
+            }
+            placeholder="15.48"
+          />
+        </label>
+        <label className="text-sm font-medium">
+          Category
+          <select
+            className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+            name="category"
+            required
+            defaultValue={expense?.category ?? ExpenseCategory.OTHER}
+          >
+            {categories.map((category) => (
+              <option key={category} value={category}>
+                {categoryLabel(category)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <label className="block text-sm font-medium">
+        Description
+        <input
+          className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+          name="description"
+          required
+          defaultValue={expense?.description}
+          placeholder="Aldi"
+        />
+      </label>
+      <label className="block text-sm font-medium">
+        Date
+        <input
+          className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+          name="date"
+          type="date"
+          defaultValue={
+            expense ? dateInputValue(expense.expenseDate) : undefined
+          }
+        />
+      </label>
+      <Button className="h-11 w-full rounded-2xl" type="submit">
+        {submitLabel}
+      </Button>
+    </form>
+  );
+}
+
+export default async function ExpensesPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const params = await searchParams;
+  const filter = getFilter(params.filter);
   const user = await requireCurrentUser();
-  const expenses = await prisma.expense.findMany({
-    where: {
-      userId: user.id,
-    },
-    orderBy: {
-      expenseDate: "desc",
-    },
-    take: 30,
-  });
+  const week = getCurrentUkWeekRange();
+  const month = getCurrentUkMonthRange();
+  const filterRange =
+    filter === "week"
+      ? { gte: week.start, lt: week.end }
+      : filter === "month"
+        ? { gte: month.start, lt: month.end }
+        : undefined;
+
+  const [filteredExpenses, weekExpenses, monthExpenses] = await Promise.all([
+    prisma.expense.findMany({
+      where: {
+        userId: user.id,
+        ...(filterRange
+          ? {
+              expenseDate: filterRange,
+            }
+          : {}),
+      },
+      orderBy: {
+        expenseDate: "desc",
+      },
+      take: filter === "all" ? 100 : undefined,
+    }),
+    prisma.expense.findMany({
+      where: {
+        userId: user.id,
+        expenseDate: {
+          gte: week.start,
+          lt: week.end,
+        },
+      },
+      orderBy: {
+        expenseDate: "asc",
+      },
+    }),
+    prisma.expense.findMany({
+      where: {
+        userId: user.id,
+        expenseDate: {
+          gte: month.start,
+          lt: month.end,
+        },
+      },
+    }),
+  ]);
+
+  const weeklyTotal = totalSpend(weekExpenses);
+  const monthlyTotal = totalSpend(monthExpenses);
+  const filteredTotal = totalSpend(filteredExpenses);
+  const categoryData = buildCategoryData(filteredExpenses);
+  const chartData = getWeekChartDays(week.start);
+
+  for (const expense of weekExpenses) {
+    const amount = Number(expense.amount);
+
+    if (amount <= 0) {
+      continue;
+    }
+
+    const key = getUkClock(expense.expenseDate).dateKey;
+    const point = chartData.find((day) => day.key === key);
+
+    if (point) {
+      point.total += amount;
+    }
+  }
 
   return (
     <div className="space-y-5">
+      <HabitToast />
       <header className="space-y-1">
-        <p className="text-sm text-muted-foreground">Latest entries</p>
+        <p className="text-sm text-muted-foreground">Spending reports</p>
         <h1 className="text-2xl font-semibold tracking-tight">Expenses</h1>
       </header>
 
-      {expenses.length === 0 ? (
+      <section className="grid grid-cols-3 gap-2">
+        {[
+          ["week", "This week"],
+          ["month", "This month"],
+          ["all", "All"],
+        ].map(([value, label]) => (
+          <Link
+            key={value}
+            href={`/expenses?filter=${value}`}
+            className={`flex h-11 items-center justify-center rounded-2xl border px-2 text-center text-sm font-medium ${
+              filter === value
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-card text-muted-foreground"
+            }`}
+          >
+            {label}
+          </Link>
+        ))}
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2">
         <Card>
-          <CardContent className="pt-4 text-sm text-muted-foreground">
-            No expenses yet. Send one to the Telegram expense bot.
+          <CardHeader>
+            <CardTitle>Weekly total</CardTitle>
+            <CardDescription>Current UK week</CardDescription>
+          </CardHeader>
+          <CardContent className="text-3xl font-semibold">
+            {money(weeklyTotal)}
           </CardContent>
         </Card>
-      ) : (
-        <section className="space-y-3">
-          {expenses.map((expense) => (
-            <Card key={expense.id}>
-              <CardHeader className="flex-row items-start justify-between gap-3">
-                <div className="min-w-0 space-y-1">
-                  <CardTitle className="truncate">
-                    {expense.description}
-                  </CardTitle>
-                  <CardDescription>
-                    {categoryLabel(expense.category)} ·{" "}
-                    {formatUkDate(expense.expenseDate)}
-                  </CardDescription>
-                </div>
-                <div className="shrink-0 text-base font-semibold">
-                  {money(Number(expense.amount))}
-                </div>
-              </CardHeader>
-            </Card>
-          ))}
-        </section>
-      )}
+        <Card>
+          <CardHeader>
+            <CardTitle>Monthly total</CardTitle>
+            <CardDescription>Current UK month</CardDescription>
+          </CardHeader>
+          <CardContent className="text-3xl font-semibold">
+            {money(monthlyTotal)}
+          </CardContent>
+        </Card>
+      </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Add expense</CardTitle>
+          <CardDescription>Manual entry for non-Telegram expenses.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ExpenseForm action={createExpense} submitLabel="Save expense" />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Daily spending</CardTitle>
+          <CardDescription>Current week</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <WeeklySpendingChart data={chartData} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Category breakdown</CardTitle>
+          <CardDescription>{money(filteredTotal)} in selected period</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CategoryBreakdownChart data={categoryData} />
+        </CardContent>
+      </Card>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold">Latest expenses</h2>
+          <p className="text-sm text-muted-foreground">
+            Showing {filter === "all" ? "latest 100" : "selected period"}
+          </p>
+        </div>
+
+        {filteredExpenses.length === 0 ? (
+          <Card>
+            <CardContent className="pt-4 text-sm text-muted-foreground">
+              No expenses recorded for this period.
+            </CardContent>
+          </Card>
+        ) : (
+          filteredExpenses.map((expense) => {
+            const updateAction = updateExpense.bind(null, expense.id);
+            const deleteAction = deleteExpense.bind(null, expense.id);
+
+            return (
+              <Card key={expense.id}>
+                <CardHeader className="flex-row items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <CardTitle className="truncate">
+                      {expense.description}
+                    </CardTitle>
+                    <CardDescription>
+                      {categoryLabel(expense.category)} ·{" "}
+                      {formatUkDate(expense.expenseDate)}
+                    </CardDescription>
+                  </div>
+                  <div className="shrink-0 text-base font-semibold">
+                    {money(Number(expense.amount))}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <details className="rounded-2xl border border-border bg-background/40 p-3">
+                    <summary className="cursor-pointer text-sm font-medium">
+                      Edit expense
+                    </summary>
+                    <div className="mt-4">
+                      <ExpenseForm
+                        action={updateAction}
+                        submitLabel="Save changes"
+                        expense={expense}
+                      />
+                    </div>
+                  </details>
+                  <form action={deleteAction}>
+                    <Button
+                      className="h-11 w-full rounded-2xl"
+                      type="submit"
+                      variant="destructive"
+                    >
+                      Delete
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
+      </section>
     </div>
   );
 }
