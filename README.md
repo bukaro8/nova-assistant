@@ -2,6 +2,7 @@
 
 NOVA is a personal assistant app foundation built with Next.js, TypeScript, Tailwind CSS, shadcn/ui, Prisma, and PostgreSQL.
 
+
 This repository currently contains the project foundation, Telegram habit reminders/reply logging, dynamic habit management, a Telegram expense logging foundation, and the first mobile dashboard. Authentication, AI categorisation, and broader business logic are intentionally not implemented yet.
 
 ## Tech Stack
