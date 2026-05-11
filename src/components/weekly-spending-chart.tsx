@@ -16,7 +16,13 @@ type ChartPoint = {
   total: number;
 };
 
-export function WeeklySpendingChart({ data }: { data: ChartPoint[] }) {
+export function WeeklySpendingChart({
+  data,
+  currency,
+}: {
+  data: ChartPoint[];
+  currency?: string | null;
+}) {
   const empty = data.every((point) => point.total === 0);
 
   if (empty) {
@@ -39,7 +45,10 @@ export function WeeklySpendingChart({ data }: { data: ChartPoint[] }) {
         <XAxis dataKey="label" tickLine={false} axisLine={false} />
         <YAxis tickLine={false} axisLine={false} width={48} />
         <Tooltip
-          formatter={(value) => [formatCurrencyShort(Number(value)), "Spent"]}
+          formatter={(value) => [
+            formatCurrencyShort(Number(value), currency),
+            "Spent",
+          ]}
           cursor={{ fill: "var(--muted)" }}
         />
         <Bar dataKey="total" fill="var(--primary)" radius={[6, 6, 0, 0]} />

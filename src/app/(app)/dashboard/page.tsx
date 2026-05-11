@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { HabitToast } from "@/components/habit-manage-controls";
+import { NovaBrand } from "@/components/nova-brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { WeeklySpendingChart } from "@/components/weekly-spending-chart";
 import { WeightTrendChart } from "@/components/weight-trend-chart";
@@ -250,8 +251,9 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-5">
       <HabitToast />
-      <header className="flex items-start justify-between gap-4">
+      <header className="flex items-center justify-between gap-4">
         <div className="space-y-1">
+          <NovaBrand className="mb-3" />
           <p className="text-sm text-muted-foreground">{getGreeting()}</p>
           <h1 className="text-3xl font-semibold tracking-tight">
             {user.name ?? "Victor"}
@@ -397,7 +399,7 @@ export default async function DashboardPage() {
           <div className="flex items-end justify-between gap-3">
             <div>
               <div className="text-4xl font-semibold tracking-tight">
-                {formatCurrency(weekTotal)}
+                {formatCurrency(weekTotal, user.currency)}
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
                 {biggestCategory
@@ -407,11 +409,11 @@ export default async function DashboardPage() {
             </div>
             {biggestCategory ? (
               <div className="rounded-2xl bg-primary/15 px-3 py-2 text-sm font-semibold text-primary">
-                {formatCurrency(biggestCategory[1])}
+                {formatCurrency(biggestCategory[1], user.currency)}
               </div>
             ) : null}
           </div>
-          <WeeklySpendingChart data={chartData} />
+          <WeeklySpendingChart data={chartData} currency={user.currency} />
         </CardContent>
       </Card>
 

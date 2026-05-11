@@ -277,7 +277,7 @@ export default async function ExpensesPage({
             <CardDescription>This week</CardDescription>
           </CardHeader>
           <CardContent className="text-3xl font-semibold">
-            {formatCurrency(weeklyTotal)}
+            {formatCurrency(weeklyTotal, user.currency)}
           </CardContent>
         </Card>
         <Card>
@@ -286,7 +286,7 @@ export default async function ExpensesPage({
             <CardDescription>This month</CardDescription>
           </CardHeader>
           <CardContent className="text-3xl font-semibold">
-            {formatCurrency(monthlyTotal)}
+            {formatCurrency(monthlyTotal, user.currency)}
           </CardContent>
         </Card>
       </section>
@@ -307,7 +307,7 @@ export default async function ExpensesPage({
           <CardDescription>Current week</CardDescription>
         </CardHeader>
         <CardContent>
-          <WeeklySpendingChart data={chartData} />
+          <WeeklySpendingChart data={chartData} currency={user.currency} />
         </CardContent>
       </Card>
 
@@ -315,11 +315,14 @@ export default async function ExpensesPage({
         <CardHeader>
           <CardTitle>Category breakdown</CardTitle>
           <CardDescription>
-            {formatCurrency(filteredTotal)} in selected period
+            {formatCurrency(filteredTotal, user.currency)} in selected period
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <CategoryBreakdownChart data={categoryData} />
+          <CategoryBreakdownChart
+            data={categoryData}
+            currency={user.currency}
+          />
         </CardContent>
       </Card>
 
@@ -355,7 +358,7 @@ export default async function ExpensesPage({
                     </CardDescription>
                   </div>
                   <div className="shrink-0 text-base font-semibold">
-                    {formatCurrency(Number(expense.amount))}
+                    {formatCurrency(Number(expense.amount), user.currency)}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">

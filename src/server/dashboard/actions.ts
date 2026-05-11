@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { prisma } from "@/server/db/prisma";
 import { ExpenseCategory } from "@/generated/prisma/enums";
+import { isCurrencyCode } from "@/lib/currency";
 import {
   isHabitColourValue,
   isHabitIconValue,
@@ -367,6 +368,38 @@ export async function saveWeight(formData: FormData) {
 
   revalidatePath("/dashboard");
   revalidatePath("/weight");
+}
+
+export async function updateCurrencyPreference(formData: FormData) {
+  const user = await requireCurrentUser();
+  const currency = String(formData.get("currency") ?? "").trim();
+
+  if (!isCurrencyCode(currency)) {
+    const params = new URLSearchParams({
+      type: "error",
+      message: "Invalid currency",
+    });
+    redirect(`/settings?${params.toString()}`);
+  }
+
+  await prisma.user.update({
+    where: {
+      id: user.id,
+    },
+    data: {
+      currency,
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/expenses");
+  revalidatePath("/settings");
+
+  const params = new URLSearchParams({
+    type: "success",
+    message: "Currency updated",
+  });
+  redirect(`/settings?${params.toString()}`);
 }
 
 function parseExpenseForm(formData: FormData) {

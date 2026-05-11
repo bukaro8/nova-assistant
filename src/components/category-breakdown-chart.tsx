@@ -9,7 +9,13 @@ type CategoryPoint = {
   total: number;
 };
 
-export function CategoryBreakdownChart({ data }: { data: CategoryPoint[] }) {
+export function CategoryBreakdownChart({
+  data,
+  currency,
+}: {
+  data: CategoryPoint[];
+  currency?: string | null;
+}) {
   if (data.length === 0) {
     return (
       <div className="flex h-40 items-center justify-center rounded-2xl border border-dashed border-border px-4 text-center text-sm text-muted-foreground">
@@ -37,7 +43,10 @@ export function CategoryBreakdownChart({ data }: { data: CategoryPoint[] }) {
           width={96}
         />
         <Tooltip
-          formatter={(value) => [formatCurrencyShort(Number(value)), "Spent"]}
+          formatter={(value) => [
+            formatCurrencyShort(Number(value), currency),
+            "Spent",
+          ]}
           cursor={{ fill: "var(--muted)" }}
         />
         <Bar dataKey="total" fill="var(--primary)" radius={[0, 6, 6, 0]} />
