@@ -15,6 +15,10 @@ type TelegramResponse<T> = {
 
 const token = process.env.TELEGRAM_HABIT_BOT_TOKEN?.trim();
 const apiBaseUrl = token ? `https://api.telegram.org/bot${token}` : "";
+const expenseToken = process.env.TELEGRAM_EXPENSE_BOT_TOKEN?.trim();
+const expenseApiBaseUrl = expenseToken
+  ? `https://api.telegram.org/bot${expenseToken}`
+  : "";
 
 export function requireHabitBotToken() {
   if (!token) {
@@ -30,13 +34,26 @@ export function requireHabitBotToken() {
   }
 }
 
-export async function telegramRequest<T>(
+export function requireExpenseBotToken() {
+  if (!expenseToken) {
+    throw new Error(
+      [
+        "TELEGRAM_EXPENSE_BOT_TOKEN is missing.",
+        "Add it to .env, then run one of:",
+        "  npm run telegram:expense:test",
+        "  npm run telegram:expense",
+      ].join("\n"),
+    );
+  }
+}
+
+async function requestTelegram<T>(
+  botApiBaseUrl: string,
+  tokenEnvName: string,
   method: string,
   body?: Record<string, unknown>,
 ): Promise<T> {
-  requireHabitBotToken();
-
-  const response = await fetch(`${apiBaseUrl}/${method}`, {
+  const response = await fetch(`${botApiBaseUrl}/${method}`, {
     method: body ? "POST" : "GET",
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
@@ -48,7 +65,7 @@ export async function telegramRequest<T>(
     if (payload.description === "Unauthorized") {
       throw new Error(
         [
-          "Telegram rejected TELEGRAM_HABIT_BOT_TOKEN as Unauthorized.",
+          `Telegram rejected ${tokenEnvName} as Unauthorized.`,
           "Check that the value in .env is the exact token from BotFather and has no extra spaces.",
           "If you regenerated the token in BotFather, update .env and rerun the command.",
         ].join("\n"),
@@ -63,8 +80,43 @@ export async function telegramRequest<T>(
   return payload.result as T;
 }
 
+export async function telegramRequest<T>(
+  method: string,
+  body?: Record<string, unknown>,
+): Promise<T> {
+  requireHabitBotToken();
+
+  return requestTelegram<T>(
+    apiBaseUrl,
+    "TELEGRAM_HABIT_BOT_TOKEN",
+    method,
+    body,
+  );
+}
+
+export async function telegramExpenseRequest<T>(
+  method: string,
+  body?: Record<string, unknown>,
+): Promise<T> {
+  requireExpenseBotToken();
+
+  return requestTelegram<T>(
+    expenseApiBaseUrl,
+    "TELEGRAM_EXPENSE_BOT_TOKEN",
+    method,
+    body,
+  );
+}
+
 export async function sendTelegramMessage(chatId: string, text: string) {
   return telegramRequest<{ message_id: number }>("sendMessage", {
+    chat_id: chatId,
+    text,
+  });
+}
+
+export async function sendExpenseTelegramMessage(chatId: string, text: string) {
+  return telegramExpenseRequest<{ message_id: number }>("sendMessage", {
     chat_id: chatId,
     text,
   });

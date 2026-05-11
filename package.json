@@ -12,6 +12,8 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "db:validate": "prisma validate",
+    "telegram:expense": "node --env-file=.env --import tsx src/server/telegram/expense-bot.ts",
+    "telegram:expense:test": "node --env-file=.env --import tsx src/server/telegram/expense-bot.ts --test",
     "telegram:habit": "node --env-file=.env --import tsx src/server/telegram/habit-bot.ts",
     "telegram:habit:delete-webhook": "node --env-file=.env --import tsx src/server/telegram/habit-bot.ts --delete-webhook",
     "telegram:habit:dev": "node --env-file=.env --import tsx src/server/telegram/habit-dev.ts",

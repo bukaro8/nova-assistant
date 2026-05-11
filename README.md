@@ -2,7 +2,7 @@
 
 NOVA is a personal assistant app foundation built with Next.js, TypeScript, Tailwind CSS, shadcn/ui, Prisma, and PostgreSQL.
 
-This repository currently contains the project foundation and development-only Telegram habit reply logging. Scheduled reminders, retry logic, expenses bot, authentication, dashboard pages, AI categorisation, and broader business logic are intentionally not implemented yet.
+This repository currently contains the project foundation, Telegram habit reminders/reply logging, and a Telegram expense logging foundation. Authentication, dashboard pages, AI categorisation, charts, and broader business logic are intentionally not implemented yet.
 
 ## Tech Stack
 
@@ -82,6 +82,18 @@ Start the Telegram habit reply listener:
 npm run telegram:habit
 ```
 
+Test the Telegram expense bot connection:
+
+```bash
+npm run telegram:expense:test
+```
+
+Start the Telegram expense listener:
+
+```bash
+npm run telegram:expense
+```
+
 Start the development server:
 
 ```bash
@@ -103,6 +115,7 @@ Required local environment variables:
 ```bash
 DATABASE_URL="postgresql://nova:nova_password@localhost:5432/nova?schema=public"
 TELEGRAM_HABIT_BOT_TOKEN="your_botfather_token"
+TELEGRAM_EXPENSE_BOT_TOKEN="your_expense_botfather_token"
 ```
 
 ### Migrations
@@ -238,6 +251,82 @@ The original seeded habits share `done`, `skip`, and `missed`, so those replies 
 
 If the same habit is logged more than once on the same local day, NOVA updates the existing `HabitLog` row instead of creating a duplicate.
 
+## Telegram Expense Bot
+
+The expense bot supports Telegram polling and rule-based expense parsing. It does not use AI categorisation yet.
+
+### BotFather Setup
+
+Create a second Telegram bot with `@BotFather`, then add its token to `.env`:
+
+```bash
+TELEGRAM_EXPENSE_BOT_TOKEN="your_expense_botfather_token"
+```
+
+### Test Bot Connection
+
+```bash
+npm run telegram:expense:test
+```
+
+This calls Telegram `getMe` for `TELEGRAM_EXPENSE_BOT_TOKEN`.
+
+### Start Expense Listener
+
+```bash
+npm run telegram:expense
+```
+
+When the first valid expense arrives, NOVA saves the Telegram chat ID to the seeded user if `telegramExpenseChatId` is empty.
+
+### Expense Message Formats
+
+```text
+15.48 aldi
+15.48 aldi 01/05/2026
+5 coffee
+20 tesco
+-100 salary
+```
+
+Rules:
+
+- The first value is the amount.
+- The last value can be an optional `DD/MM/YYYY` date.
+- If no date is provided, NOVA uses today's UK date.
+- The original message is stored in `rawText`.
+- Negative amounts are categorised as `INCOME`.
+
+### Rule Categories
+
+- Groceries: `aldi`, `tesco`, `sainsbury`, `lidl`, `asda`, `morrisons`
+- Food: `coffee`, `restaurant`, `takeaway`, `mcdonalds`, `subway`, `kfc`
+- Transport: `uber`, `train`, `bus`, `petrol`, `fuel`
+- Shopping: `amazon`, `ebay`, `paypal`
+- Sands: `totalenergies`
+- Default: `OTHER`
+
+After saving, the bot replies with a confirmation like:
+
+```text
+✅ Expense saved
+
+£15.48
+Aldi
+Category: Groceries
+Date: 11/05/2026
+```
+
+Invalid messages receive:
+
+```text
+❌ Invalid format
+
+Try:
+15.48 aldi
+15.48 aldi 01/05/2026
+```
+
 ## Useful Commands
 
 ```bash
@@ -249,6 +338,8 @@ npm run db:migrate -- --name describe_the_change
 npm run db:generate
 npm run db:seed
 npm run db:studio
+npm run telegram:expense:test
+npm run telegram:expense
 npm run telegram:habit:test
 npm run telegram:habit:delete-webhook
 npm run telegram:habit
