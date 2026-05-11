@@ -113,14 +113,14 @@ Available pages:
 - `/expenses`
 - `/weight`
 - `/settings`
-- `/settings/habits`
+- `/habits/manage`
 
 ## Habit Management
 
-Habits are managed from:
+Habits are managed from the Habits tab:
 
 ```bash
-http://localhost:3000/settings/habits
+http://localhost:3000/habits/manage
 ```
 
 From this page you can:

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CheckCircle2, Circle } from "lucide-react";
 
 import { markHabitDone } from "@/server/dashboard/actions";
@@ -46,9 +47,19 @@ export default async function HabitsPage() {
 
   return (
     <div className="space-y-5">
-      <header className="space-y-1">
-        <p className="text-sm text-muted-foreground">{clock.dayCode}</p>
-        <h1 className="text-2xl font-semibold tracking-tight">Today&apos;s habits</h1>
+      <header className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground">{clock.dayCode}</p>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Today&apos;s habits
+          </h1>
+        </div>
+        <Link
+          href="/habits/manage"
+          className="inline-flex h-10 shrink-0 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          Manage habits
+        </Link>
       </header>
 
       {habits.length === 0 ? (

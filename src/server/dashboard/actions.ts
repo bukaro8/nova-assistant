@@ -60,7 +60,7 @@ function parseScheduleDays(formData: FormData) {
 
 function habitRedirectMessage(type: "success" | "error", message: string): never {
   const params = new URLSearchParams({ type, message });
-  redirect(`/settings/habits?${params.toString()}`);
+  redirect(`/habits/manage?${params.toString()}`);
 }
 
 function parseHabitForm(formData: FormData): ParsedHabitForm {
@@ -228,7 +228,7 @@ export async function createHabit(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/habits");
   revalidatePath("/settings");
-  revalidatePath("/settings/habits");
+  revalidatePath("/habits/manage");
   habitRedirectMessage("success", "Habit added.");
 }
 
@@ -269,7 +269,7 @@ export async function updateHabit(habitId: string, formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/habits");
   revalidatePath("/settings");
-  revalidatePath("/settings/habits");
+  revalidatePath("/habits/manage");
   habitRedirectMessage("success", "Habit updated.");
 }
 
@@ -288,7 +288,7 @@ export async function disableHabit(habitId: string) {
 
   revalidatePath("/dashboard");
   revalidatePath("/habits");
-  revalidatePath("/settings/habits");
+  revalidatePath("/habits/manage");
   habitRedirectMessage("success", "Habit disabled.");
 }
 
@@ -328,6 +328,6 @@ export async function deleteHabit(habitId: string) {
 
   revalidatePath("/dashboard");
   revalidatePath("/habits");
-  revalidatePath("/settings/habits");
+  revalidatePath("/habits/manage");
   habitRedirectMessage("success", "Habit deleted.");
 }

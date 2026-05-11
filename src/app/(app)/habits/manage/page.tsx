@@ -220,16 +220,16 @@ export default async function HabitSettingsPage({
     <div className="space-y-5">
       <header className="space-y-3">
         <Link
-          href="/settings"
+          href="/habits"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground"
         >
           <ArrowLeft className="size-4" />
-          Settings
+          Habits
         </Link>
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">Victor-only mode</p>
           <h1 className="text-2xl font-semibold tracking-tight">
-            Habit management
+            Manage habits
           </h1>
         </div>
       </header>
