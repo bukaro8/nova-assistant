@@ -47,6 +47,14 @@ function normalizeReply(text: string) {
   return text.trim().toLowerCase();
 }
 
+function invalidHabitReplyMessage() {
+  return [
+    "❌ I could not match that reply to a habit.",
+    "",
+    "Try replying with one of your habit codes.",
+  ].join("\n");
+}
+
 function getLocalDayRange(date: Date) {
   const start = new Date(date);
   start.setHours(0, 0, 0, 0);
@@ -206,6 +214,7 @@ async function logHabitReply(message: TelegramMessage) {
     console.warn(
       `Invalid habit reply "${replyText}" from chat ${chatId}; no matching habit validReplies entry.`,
     );
+    await sendTelegramMessage(chatId, invalidHabitReplyMessage());
     return;
   }
 
@@ -213,6 +222,7 @@ async function logHabitReply(message: TelegramMessage) {
     console.warn(
       `Ambiguous habit reply "${replyText}" from chat ${chatId}; matched habit codes: ${matchingHabits.map((habit) => habit.code).join(", ")}.`,
     );
+    await sendTelegramMessage(chatId, invalidHabitReplyMessage());
     return;
   }
 
@@ -253,6 +263,10 @@ async function logHabitReply(message: TelegramMessage) {
       replyText: updatedLog.replyText,
       loggedAt: updatedLog.loggedAt,
     });
+    await sendTelegramMessage(
+      chatId,
+      `✅ ${habit.name} already logged. Updated your reply.`,
+    );
     console.log(`Updated ${habit.code} log for ${user.email}.`);
     return;
   }
@@ -277,6 +291,7 @@ async function logHabitReply(message: TelegramMessage) {
     replyText: createdLog.replyText,
     loggedAt: createdLog.loggedAt,
   });
+  await sendTelegramMessage(chatId, `✅ ${habit.name} logged for today.`);
   console.log(`Logged ${habit.code} for ${user.email}.`);
 }
 

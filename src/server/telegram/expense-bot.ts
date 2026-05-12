@@ -134,20 +134,8 @@ function formatExpenseDate(date: Date) {
   }).format(date);
 }
 
-function formatMoney(amount: string) {
-  return formatCurrency(Number(amount));
-}
-
-function toDisplayDescription(description: string) {
-  return description
-    .split(" ")
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-function toDisplayCategory(category: ExpenseCategory) {
-  return category.charAt(0) + category.slice(1).toLowerCase();
+function formatMoney(amount: string, currency: string | null | undefined) {
+  return formatCurrency(Number(amount), currency);
 }
 
 function categorize(description: string, amount: string): ExpenseCategory {
@@ -226,6 +214,8 @@ function parseExpenseMessage(text: string): ParsedExpense | null {
 }
 
 async function findLinkedUser(chatId: string) {
+  debug("Looking up user by telegramExpenseChatId.", { chatId });
+
   const existingUser = await prisma.user.findUnique({
     where: {
       telegramExpenseChatId: chatId,
@@ -255,13 +245,16 @@ function invalidFormatMessage() {
   ].join("\n");
 }
 
-function savedExpenseMessage(expense: ParsedExpense) {
+function savedExpenseMessage(
+  expense: ParsedExpense,
+  currency: string | null | undefined,
+) {
   return [
     "✅ Expense saved",
     "",
-    formatMoney(expense.amount),
-    toDisplayDescription(expense.description),
-    `Category: ${toDisplayCategory(expense.category)}`,
+    `Amount: ${formatMoney(expense.amount, currency)}`,
+    `Description: ${expense.description}`,
+    `Category: ${expense.category}`,
     `Date: ${formatExpenseDate(expense.expenseDate)}`,
   ].join("\n");
 }
@@ -409,7 +402,21 @@ async function handleExpenseMessage(message: TelegramMessage) {
     expenseDate: expense.expenseDate,
   });
 
-  await sendExpenseTelegramMessage(chatId, savedExpenseMessage(parsedExpense));
+  debug("Attempting Telegram expense confirmation send.", {
+    chatId,
+    expenseId: expense.id,
+  });
+
+  const confirmation = await sendExpenseTelegramMessage(
+    chatId,
+    savedExpenseMessage(parsedExpense, user.currency),
+  );
+
+  debug("Telegram expense confirmation result.", {
+    chatId,
+    expenseId: expense.id,
+    messageId: confirmation.message_id,
+  });
 
   console.log(`Saved expense ${expense.id} for ${user.email}.`);
 }

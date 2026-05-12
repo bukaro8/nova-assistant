@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   ArrowUpRight,
   Dumbbell,
+  ExternalLink,
   ReceiptText,
   Scale,
   Send,
@@ -13,7 +14,7 @@ import {
 
 import { LogoutButton } from "@/components/auth/logout-button";
 import { HabitToast } from "@/components/habit-manage-controls";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -33,6 +34,8 @@ import { requireCurrentUser } from "@/server/dashboard/user";
 
 export const dynamic = "force-dynamic";
 
+const telegramAssistantUrl = "https://t.me/mynovaassistant_bot";
+
 export default async function SettingsPage({
   searchParams,
 }: {
@@ -45,6 +48,9 @@ export default async function SettingsPage({
   const telegramConnected = Boolean(
     user.telegramHabitChatId || user.telegramExpenseChatId,
   );
+  const telegramConnectUrl = params.telegramCode
+    ? `${telegramAssistantUrl}?start=${encodeURIComponent(params.telegramCode)}`
+    : null;
 
   return (
     <div className="space-y-5">
@@ -155,70 +161,128 @@ export default async function SettingsPage({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Smartphone className="size-5 text-primary" />
-            Telegram
+            Connect NOVA Assistant
           </CardTitle>
           <CardDescription>
-            Connect your Telegram chat to NOVA reminders and logging.
+            Get reminders and log habits/expenses directly from Telegram.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-3xl border border-border bg-background p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="font-medium">
-                  {telegramConnected ? "Connected ✅" : "Not connected"}
+          {telegramConnected ? (
+            <>
+              <div className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-500/15 text-emerald-500">
+                    <ShieldCheck className="size-5" />
+                  </span>
+                  <div>
+                    <div className="font-medium">
+                      ✅ NOVA Assistant connected
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      You will receive reminders and can log habits and expenses
+                      in Telegram.
+                    </p>
+                  </div>
                 </div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  Habit bot: {user.telegramHabitChatId ? "connected" : "not connected"} ·
-                  Expense bot:{" "}
-                  {user.telegramExpenseChatId ? "connected" : "not connected"}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <form action={sendTelegramTestMessage}>
+                  <Button
+                    className="h-12 w-full rounded-2xl"
+                    type="submit"
+                    variant="outline"
+                  >
+                    <Send className="size-4" />
+                    Send test message
+                  </Button>
+                </form>
+                <form action={disconnectTelegram}>
+                  <Button
+                    className="h-12 w-full rounded-2xl"
+                    type="submit"
+                    variant="destructive"
+                  >
+                    Disconnect Telegram
+                  </Button>
+                </form>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="rounded-3xl border border-border bg-background p-4">
+                <div className="flex items-start gap-3">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary">
+                    1
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium">
+                      Don&apos;t have Telegram yet?
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Install Telegram first, then come back to connect NOVA.
+                    </p>
+                    <a
+                      className={buttonVariants({
+                        variant: "outline",
+                        className: "mt-3 h-11 rounded-2xl",
+                      })}
+                      href="https://telegram.org/"
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Get Telegram
+                      <ExternalLink className="size-4" />
+                    </a>
+                  </div>
                 </div>
               </div>
-              <ShieldCheck className="size-5 text-primary" />
-            </div>
-          </div>
 
-          {params.telegramCode ? (
-            <div className="rounded-3xl border border-primary/30 bg-primary/10 p-4">
-              <div className="text-sm font-medium text-primary">
-                Your connection code
-              </div>
-              <div className="mt-2 font-mono text-4xl font-semibold tracking-[0.22em]">
-                {params.telegramCode}
-              </div>
-              <p className="mt-3 text-sm text-muted-foreground">
-                Send this code to your NOVA Telegram bot within 10 minutes. It
-                can only be used once.
-              </p>
-            </div>
-          ) : null}
+              <div className="rounded-3xl border border-primary/25 bg-primary/10 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground">
+                    2
+                  </span>
+                  <div className="min-w-0 flex-1 space-y-3">
+                    <div>
+                      <div className="font-medium">Connect assistant</div>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Open Telegram and finish the secure connection in one
+                        tap.
+                      </p>
+                    </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <form action={createTelegramConnectionCodeAction}>
-              <Button className="h-11 w-full rounded-2xl" type="submit">
-                Connect Telegram
-              </Button>
-            </form>
-            <form action={sendTelegramTestMessage}>
-              <Button
-                className="h-11 w-full rounded-2xl"
-                type="submit"
-                variant="outline"
-              >
-                <Send className="size-4" />
-                Send test message
-              </Button>
-            </form>
-            <form action={disconnectTelegram}>
-              <Button
-                className="h-11 w-full rounded-2xl"
-                type="submit"
-                variant="destructive"
-              >
-                Disconnect Telegram
-              </Button>
-            </form>
-          </div>
+                    {telegramConnectUrl ? (
+                      <>
+                        <a
+                          className={buttonVariants({
+                            className: "h-12 w-full rounded-2xl",
+                          })}
+                          href={telegramConnectUrl}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          Connect with Telegram
+                          <ArrowUpRight className="size-4" />
+                        </a>
+                        <p className="text-sm text-muted-foreground">
+                          Telegram will open automatically. Press START to
+                          finish connecting.
+                        </p>
+                      </>
+                    ) : (
+                      <form action={createTelegramConnectionCodeAction}>
+                        <Button className="h-12 w-full rounded-2xl" type="submit">
+                          Connect Telegram
+                        </Button>
+                      </form>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

@@ -347,7 +347,7 @@ Flow:
 1. Open Settings.
 2. In the Telegram card, click `Connect Telegram`.
 3. NOVA shows a six-character connection code.
-4. Send that code to the Telegram bot you want to connect.
+4. Send `/start CODE` to the Telegram bot you want to connect, replacing `CODE` with the code shown in NOVA.
 5. Generate another code if you also want to connect the second Telegram bot.
 
 Connection codes:
@@ -363,6 +363,26 @@ The Settings Telegram card also supports:
 - `Send test message`
 
 Disconnected Telegram chats cannot log habits or expenses until they are linked again.
+
+### Local Telegram Test Flow
+
+Run the web app and local Telegram workers together:
+
+```bash
+npm run dev:all
+```
+
+Then test both bots:
+
+1. Open `http://localhost:3000/settings`.
+2. Click `Connect Telegram`.
+3. Send `/start CODE` to the habit bot.
+4. Generate a new code in Settings.
+5. Send `/start CODE` to the expense bot.
+6. Send `Study` to the habit bot and expect `✅ Study logged for today.`
+7. Send `15.48 aldi` to the expense bot and expect an expense confirmation.
+
+Use a fresh connection code for each bot because codes are one-time use.
 
 ## Telegram Habit Bot
 
@@ -523,10 +543,10 @@ After saving, the bot replies with a confirmation like:
 ```text
 ✅ Expense saved
 
-£15.48
-Aldi
-Category: Groceries
-Date: 11/05/2026
+Amount: £15.48
+Description: aldi
+Category: GROCERIES
+Date: 12/05/2026
 ```
 
 Invalid messages receive:
