@@ -3,6 +3,7 @@
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 
+import { createEmailVerification } from "@/server/auth/email-verification";
 import { prisma } from "@/server/db/prisma";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -10,15 +11,6 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function registerRedirect(type: "error" | "success", message: string): never {
   const params = new URLSearchParams({ type, message });
   redirect(`/register?${params.toString()}`);
-}
-
-function loginRedirect(message: string, email: string): never {
-  const params = new URLSearchParams({
-    registered: "1",
-    message,
-    email,
-  });
-  redirect(`/login?${params.toString()}`);
 }
 
 function isUniqueConstraintError(error: unknown) {
@@ -36,9 +28,13 @@ export async function registerUser(formData: FormData) {
     .trim()
     .toLowerCase();
   const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
-  if (!name || !email || !password) {
-    registerRedirect("error", "Name, email, and password are required.");
+  if (!name || !email || !password || !confirmPassword) {
+    registerRedirect(
+      "error",
+      "Name, email, password, and confirmation are required.",
+    );
   }
 
   if (!EMAIL_PATTERN.test(email)) {
@@ -49,24 +45,42 @@ export async function registerUser(formData: FormData) {
     registerRedirect("error", "Password must be at least 8 characters.");
   }
 
+  if (password !== confirmPassword) {
+    registerRedirect("error", "Passwords do not match.");
+  }
+
+  const existingUser = await prisma.user.findUnique({
+    where: {
+      email,
+    },
+  });
+
+  if (existingUser) {
+    registerRedirect("error", "An account already exists for that email.");
+  }
+
   const passwordHash = await bcrypt.hash(password, 12);
 
   try {
-    await prisma.user.create({
-      data: {
-        name,
-        email,
-        passwordHash,
-        currency: "GBP",
-      },
+    await createEmailVerification({
+      name,
+      email,
+      passwordHash,
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       registerRedirect("error", "An account already exists for that email.");
     }
 
+    if (
+      error instanceof Error &&
+      error.message === "Email service is not configured."
+    ) {
+      registerRedirect("error", "Email verification is not configured.");
+    }
+
     throw error;
   }
 
-  loginRedirect("Account created. Sign in to continue.", email);
+  redirect(`/verify-email?sent=1&email=${encodeURIComponent(email)}`);
 }

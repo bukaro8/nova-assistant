@@ -142,8 +142,11 @@ Registration requires:
 - `name`
 - `email`
 - `password`
+- `confirm password`
 
-Passwords are hashed with `bcryptjs` and stored in `User.passwordHash`. Plain text passwords are never stored.
+Password accounts require email verification before the `User` record is created. NOVA stores a one-time hashed verification token with the pending name and hashed password, emails the user a verification link, and creates the account only after the link is opened. Tokens expire after 24 hours and are deleted after use.
+
+Passwords are hashed with `bcryptjs` and stored in `User.passwordHash` only after email verification succeeds. Plain text passwords are never stored.
 
 Google sign-in creates a `User` on first login when the Google account email is new. The Google user's name and email are saved, `currency` defaults to `GBP`, and `passwordHash` stays empty.
 
@@ -163,6 +166,34 @@ AUTH_SECRET="generate_a_long_random_secret"
 NEXTAUTH_URL="http://localhost:3000"
 GOOGLE_CLIENT_ID="your_google_oauth_client_id"
 GOOGLE_CLIENT_SECRET="your_google_oauth_client_secret"
+RESEND_API_KEY="your_resend_api_key"
+EMAIL_FROM="NOVA <hello@your-domain.com>"
+```
+
+### Email Verification Setup
+
+NOVA uses Resend for password-account verification emails.
+
+1. Create a Resend account.
+2. Add and verify your sending domain, or use Resend's onboarding sender for local testing.
+3. Create an API key.
+4. Add these variables to `.env` locally and to Coolify runtime environment variables:
+
+```bash
+RESEND_API_KEY="your_resend_api_key"
+EMAIL_FROM="NOVA <hello@your-domain.com>"
+```
+
+The verification link uses `NEXTAUTH_URL`, so set it correctly:
+
+```bash
+NEXTAUTH_URL="http://localhost:3000"
+```
+
+In production:
+
+```bash
+NEXTAUTH_URL="https://nova.vicstack.uk"
 ```
 
 ### Google OAuth Setup
@@ -247,6 +278,8 @@ AUTH_SECRET="generate_a_long_random_secret"
 NEXTAUTH_URL="http://localhost:3000"
 GOOGLE_CLIENT_ID="your_google_oauth_client_id"
 GOOGLE_CLIENT_SECRET="your_google_oauth_client_secret"
+RESEND_API_KEY="your_resend_api_key"
+EMAIL_FROM="NOVA <hello@your-domain.com>"
 TELEGRAM_HABIT_BOT_TOKEN="your_botfather_token"
 TELEGRAM_EXPENSE_BOT_TOKEN="your_expense_botfather_token"
 ```

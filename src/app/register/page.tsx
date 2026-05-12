@@ -89,8 +89,19 @@ export default async function RegisterPage({
                   type="password"
                 />
               </label>
+              <label className="block text-sm font-medium">
+                Confirm password
+                <input
+                  autoComplete="new-password"
+                  className="mt-1 h-12 w-full rounded-2xl border border-border bg-background px-4 text-base outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  minLength={8}
+                  name="confirmPassword"
+                  required
+                  type="password"
+                />
+              </label>
               <Button className="h-12 w-full rounded-2xl" type="submit">
-                Create account
+                Send verification email
               </Button>
             </form>
             <p className="text-center text-sm text-muted-foreground">

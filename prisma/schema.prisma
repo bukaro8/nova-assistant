@@ -27,6 +27,19 @@ model User {
   weightLogs            WeightLog[]
 }
 
+model EmailVerificationToken {
+  id                  String   @id @default(cuid())
+  email               String
+  token               String   @unique
+  pendingName         String
+  pendingPasswordHash String
+  expiresAt           DateTime
+  createdAt           DateTime @default(now())
+
+  @@index([email])
+  @@index([expiresAt])
+}
+
 model Habit {
   id              String        @id @default(cuid())
   userId          String
