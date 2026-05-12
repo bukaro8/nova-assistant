@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { LoginForm } from "@/components/auth/login-form";
 import { NovaBrand } from "@/components/nova-brand";
 import {
@@ -54,6 +55,12 @@ export default async function LoginPage({
                 {params.message ?? "Account created. Sign in to continue."}
               </div>
             ) : null}
+            <GoogleSignInButton callbackUrl={callbackUrl} />
+            <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              <span className="h-px flex-1 bg-border" />
+              or
+              <span className="h-px flex-1 bg-border" />
+            </div>
             <LoginForm callbackUrl={callbackUrl} defaultEmail={params.email} />
             <p className="text-center text-sm text-muted-foreground">
               New to NOVA?{" "}

@@ -123,7 +123,7 @@ Available pages:
 
 ## Authentication
 
-NOVA uses Auth.js / NextAuth credentials authentication.
+NOVA uses Auth.js / NextAuth with email/password credentials and Google sign-in.
 
 Register at:
 
@@ -145,6 +145,8 @@ Registration requires:
 
 Passwords are hashed with `bcryptjs` and stored in `User.passwordHash`. Plain text passwords are never stored.
 
+Google sign-in creates a `User` on first login when the Google account email is new. The Google user's name and email are saved, `currency` defaults to `GBP`, and `passwordHash` stays empty.
+
 Protected routes redirect unauthenticated users to `/login`:
 
 - `/dashboard`
@@ -159,7 +161,27 @@ Set an auth secret in `.env`:
 ```bash
 AUTH_SECRET="generate_a_long_random_secret"
 NEXTAUTH_URL="http://localhost:3000"
+GOOGLE_CLIENT_ID="your_google_oauth_client_id"
+GOOGLE_CLIENT_SECRET="your_google_oauth_client_secret"
 ```
+
+### Google OAuth Setup
+
+Create OAuth credentials in Google Cloud Console:
+
+1. Open Google Cloud Console.
+2. Create or select a project.
+3. Configure the OAuth consent screen.
+4. Create an OAuth 2.0 Client ID.
+5. Choose `Web application`.
+6. Add authorized redirect URIs:
+
+```text
+http://localhost:3000/api/auth/callback/google
+https://nova.vicstack.uk/api/auth/callback/google
+```
+
+7. Copy the client ID and client secret into `.env` locally and into Coolify runtime environment variables in production.
 
 ## Habit Management
 
@@ -223,6 +245,8 @@ Required local environment variables:
 DATABASE_URL="postgresql://nova:nova_password@localhost:5432/nova?schema=public"
 AUTH_SECRET="generate_a_long_random_secret"
 NEXTAUTH_URL="http://localhost:3000"
+GOOGLE_CLIENT_ID="your_google_oauth_client_id"
+GOOGLE_CLIENT_SECRET="your_google_oauth_client_secret"
 TELEGRAM_HABIT_BOT_TOKEN="your_botfather_token"
 TELEGRAM_EXPENSE_BOT_TOKEN="your_expense_botfather_token"
 ```

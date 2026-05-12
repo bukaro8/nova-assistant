@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { NovaBrand } from "@/components/nova-brand";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,6 +52,12 @@ export default async function RegisterPage({
                 {params.message}
               </div>
             ) : null}
+            <GoogleSignInButton callbackUrl="/dashboard" />
+            <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              <span className="h-px flex-1 bg-border" />
+              or
+              <span className="h-px flex-1 bg-border" />
+            </div>
             <form action={registerUser} className="space-y-4">
               <label className="block text-sm font-medium">
                 Name
