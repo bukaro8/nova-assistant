@@ -16,10 +16,16 @@ function getBaseUrl() {
   const configuredUrl = process.env.NEXTAUTH_URL?.trim();
 
   if (configuredUrl) {
-    return configuredUrl.replace(/\/$/, "");
+    return configuredUrl.replace(/\/+$/, "");
   }
 
   return "http://localhost:3000";
+}
+
+function getConfiguredBaseUrl() {
+  const configuredUrl = process.env.NEXTAUTH_URL?.trim();
+
+  return configuredUrl ? configuredUrl.replace(/\/+$/, "") : null;
 }
 
 function getVerificationUrl(token: string) {
@@ -33,7 +39,10 @@ function buildVerificationEmail({
   name: string;
   verificationUrl: string;
 }) {
-  const logoUrl = `${getBaseUrl()}/branding/logo-nova.png`;
+  const configuredBaseUrl = getConfiguredBaseUrl();
+  const logoHtml = configuredBaseUrl
+    ? `<img src="${configuredBaseUrl}/branding/logo-nova.png" width="72" height="72" alt="NOVA logo" style="display:block;margin:0 auto 12px;border:0;" />`
+    : "";
 
   return `<!doctype html>
 <html>
@@ -44,7 +53,7 @@ function buildVerificationEmail({
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#0f172a;border:1px solid #1e293b;border-radius:24px;overflow:hidden;">
             <tr>
               <td style="padding:28px 28px 12px;text-align:center;">
-                <img src="${logoUrl}" width="72" height="72" alt="NOVA" style="display:block;margin:0 auto 12px;border:0;" />
+                ${logoHtml}
                 <div style="font-size:18px;font-weight:700;letter-spacing:0.18em;">NOVA</div>
               </td>
             </tr>

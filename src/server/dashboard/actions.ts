@@ -15,6 +15,11 @@ import {
   getUtcForUkDateInput,
 } from "@/server/dashboard/date-utils";
 import { requireCurrentUser } from "@/server/dashboard/user";
+import {
+  sendExpenseTelegramMessage,
+  sendTelegramMessage,
+} from "@/server/telegram/api";
+import { createTelegramConnectionCode } from "@/server/telegram/linking";
 
 const VALID_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -471,6 +476,70 @@ export async function updateAssistantPreferences(formData: FormData) {
     message: "Assistants updated",
   });
   redirect(`/settings?${params.toString()}`);
+}
+
+export async function createTelegramConnectionCodeAction() {
+  const user = await requireCurrentUser();
+  const code = await createTelegramConnectionCode(user.id);
+  const params = new URLSearchParams({
+    type: "success",
+    message: "Telegram connection code created",
+    telegramCode: code,
+  });
+
+  revalidatePath("/settings");
+  redirect(`/settings?${params.toString()}`);
+}
+
+export async function disconnectTelegram() {
+  const user = await requireCurrentUser();
+
+  await prisma.user.update({
+    where: {
+      id: user.id,
+    },
+    data: {
+      telegramHabitChatId: null,
+      telegramExpenseChatId: null,
+      telegramConnectionCodes: {
+        deleteMany: {},
+      },
+    },
+  });
+
+  revalidatePath("/settings");
+  redirect("/settings?type=success&message=Telegram disconnected");
+}
+
+export async function sendTelegramTestMessage() {
+  const user = await requireCurrentUser();
+  const sends: Array<Promise<unknown>> = [];
+
+  if (user.telegramHabitChatId) {
+    sends.push(
+      sendTelegramMessage(
+        user.telegramHabitChatId,
+        "NOVA test message: your habit bot is connected.",
+      ),
+    );
+  }
+
+  if (user.telegramExpenseChatId) {
+    sends.push(
+      sendExpenseTelegramMessage(
+        user.telegramExpenseChatId,
+        "NOVA test message: your expense bot is connected.",
+      ),
+    );
+  }
+
+  if (sends.length === 0) {
+    redirect("/settings?type=error&message=Telegram is not connected");
+  }
+
+  await Promise.all(sends);
+
+  redirect("/settings?type=success&message=Telegram test message sent");
 }
 
 function parseExpenseForm(formData: FormData) {

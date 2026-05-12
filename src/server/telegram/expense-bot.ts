@@ -6,6 +6,12 @@ import { formatCurrency } from "@/lib/currency";
 
 import { prisma } from "../db/prisma";
 import {
+  claimTelegramConnectionCode,
+  extractTelegramStartCode,
+  looksLikeTelegramConnectionCode,
+  normalizeTelegramConnectionCode,
+} from "./linking";
+import {
   requireExpenseBotToken,
   sendExpenseTelegramMessage,
   telegramExpenseRequest,
@@ -219,7 +225,7 @@ function parseExpenseMessage(text: string): ParsedExpense | null {
   };
 }
 
-async function findOrClaimUser(chatId: string) {
+async function findLinkedUser(chatId: string) {
   const existingUser = await prisma.user.findUnique({
     where: {
       telegramExpenseChatId: chatId,
@@ -235,42 +241,8 @@ async function findOrClaimUser(chatId: string) {
     return existingUser;
   }
 
-  debug("No user found for telegramExpenseChatId; looking for unclaimed user.", {
-    chatId,
-  });
-
-  const unclaimedUser = await prisma.user.findFirst({
-    where: {
-      telegramExpenseChatId: null,
-    },
-    orderBy: {
-      createdAt: "asc",
-    },
-  });
-
-  if (!unclaimedUser) {
-    debug("No unclaimed user available for Telegram expense chat.", {
-      chatId,
-    });
-    return null;
-  }
-
-  const claimedUser = await prisma.user.update({
-    where: {
-      id: unclaimedUser.id,
-    },
-    data: {
-      telegramExpenseChatId: chatId,
-    },
-  });
-
-  debug("User claimed for Telegram expense chat.", {
-    chatId,
-    userId: claimedUser.id,
-    email: claimedUser.email,
-  });
-
-  return claimedUser;
+  debug("No user found for telegramExpenseChatId.", { chatId });
+  return null;
 }
 
 function invalidFormatMessage() {
@@ -310,6 +282,89 @@ async function handleExpenseMessage(message: TelegramMessage) {
     return;
   }
 
+  const startCode = extractTelegramStartCode(text);
+
+  if (startCode) {
+    const result = await claimTelegramConnectionCode({
+      chatId,
+      code: startCode,
+      kind: "expense",
+    });
+
+    if (result.status === "linked") {
+      await sendExpenseTelegramMessage(
+        chatId,
+        "✅ Telegram connected to NOVA expense tracking.",
+      );
+      console.log(
+        `Linked Telegram expense chat ${chatId} to ${result.user.email}.`,
+      );
+      return;
+    }
+
+    if (result.status === "already-linked") {
+      await sendExpenseTelegramMessage(
+        chatId,
+        "This Telegram account is already connected to another NOVA account.",
+      );
+      console.warn(`Telegram expense chat ${chatId} is already linked elsewhere.`);
+      return;
+    }
+
+    await sendExpenseTelegramMessage(
+      chatId,
+      "❌ Invalid or expired NOVA connection code. Generate a new code in Settings.",
+    );
+    console.warn(
+      `Invalid Telegram expense /start connection code from chat ${chatId}.`,
+    );
+    return;
+  }
+
+  const user = await findLinkedUser(chatId);
+
+  if (!user) {
+    if (looksLikeTelegramConnectionCode(text)) {
+      const result = await claimTelegramConnectionCode({
+        chatId,
+        code: normalizeTelegramConnectionCode(text),
+        kind: "expense",
+      });
+
+      if (result.status === "linked") {
+        await sendExpenseTelegramMessage(
+          chatId,
+          "✅ Telegram connected to NOVA expense tracking.",
+        );
+        console.log(`Linked Telegram expense chat ${chatId} to ${result.user.email}.`);
+        return;
+      }
+
+      if (result.status === "already-linked") {
+        await sendExpenseTelegramMessage(
+          chatId,
+          "This Telegram account is already connected to another NOVA account.",
+        );
+        console.warn(`Telegram expense chat ${chatId} is already linked elsewhere.`);
+        return;
+      }
+
+      await sendExpenseTelegramMessage(
+        chatId,
+        "❌ Invalid or expired NOVA connection code. Generate a new code in Settings.",
+      );
+      console.warn(`Invalid Telegram expense connection code from chat ${chatId}.`);
+      return;
+    }
+
+    console.warn(`No NOVA user available for Telegram expense chat ${chatId}.`);
+    await sendExpenseTelegramMessage(
+      chatId,
+      "Connect this chat from NOVA Settings before logging expenses.",
+    );
+    return;
+  }
+
   const parsedExpense = parseExpenseMessage(text);
 
   debug("Parse result.", {
@@ -328,13 +383,6 @@ async function handleExpenseMessage(message: TelegramMessage) {
   if (!parsedExpense) {
     await sendExpenseTelegramMessage(chatId, invalidFormatMessage());
     console.warn(`Invalid expense format from chat ${chatId}: "${text}"`);
-    return;
-  }
-
-  const user = await findOrClaimUser(chatId);
-
-  if (!user) {
-    console.warn(`No NOVA user available for Telegram expense chat ${chatId}.`);
     return;
   }
 

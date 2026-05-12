@@ -4,6 +4,9 @@ import {
   Dumbbell,
   ReceiptText,
   Scale,
+  Send,
+  ShieldCheck,
+  Smartphone,
   UserCircle,
   WalletCards,
 } from "lucide-react";
@@ -20,6 +23,9 @@ import {
 } from "@/components/ui/card";
 import { currencyOptions } from "@/lib/currency";
 import {
+  createTelegramConnectionCodeAction,
+  disconnectTelegram,
+  sendTelegramTestMessage,
   updateAssistantPreferences,
   updateCurrencyPreference,
 } from "@/server/dashboard/actions";
@@ -27,8 +33,18 @@ import { requireCurrentUser } from "@/server/dashboard/user";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    telegramCode?: string;
+  }>;
+}) {
   const user = await requireCurrentUser();
+  const params = await searchParams;
+  const telegramConnected = Boolean(
+    user.telegramHabitChatId || user.telegramExpenseChatId,
+  );
 
   return (
     <div className="space-y-5">
@@ -132,6 +148,77 @@ export default async function SettingsPage() {
               Save assistants
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Smartphone className="size-5 text-primary" />
+            Telegram
+          </CardTitle>
+          <CardDescription>
+            Connect your Telegram chat to NOVA reminders and logging.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-3xl border border-border bg-background p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="font-medium">
+                  {telegramConnected ? "Connected ✅" : "Not connected"}
+                </div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  Habit bot: {user.telegramHabitChatId ? "connected" : "not connected"} ·
+                  Expense bot:{" "}
+                  {user.telegramExpenseChatId ? "connected" : "not connected"}
+                </div>
+              </div>
+              <ShieldCheck className="size-5 text-primary" />
+            </div>
+          </div>
+
+          {params.telegramCode ? (
+            <div className="rounded-3xl border border-primary/30 bg-primary/10 p-4">
+              <div className="text-sm font-medium text-primary">
+                Your connection code
+              </div>
+              <div className="mt-2 font-mono text-4xl font-semibold tracking-[0.22em]">
+                {params.telegramCode}
+              </div>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Send this code to your NOVA Telegram bot within 10 minutes. It
+                can only be used once.
+              </p>
+            </div>
+          ) : null}
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <form action={createTelegramConnectionCodeAction}>
+              <Button className="h-11 w-full rounded-2xl" type="submit">
+                Connect Telegram
+              </Button>
+            </form>
+            <form action={sendTelegramTestMessage}>
+              <Button
+                className="h-11 w-full rounded-2xl"
+                type="submit"
+                variant="outline"
+              >
+                <Send className="size-4" />
+                Send test message
+              </Button>
+            </form>
+            <form action={disconnectTelegram}>
+              <Button
+                className="h-11 w-full rounded-2xl"
+                type="submit"
+                variant="destructive"
+              >
+                Disconnect Telegram
+              </Button>
+            </form>
+          </div>
         </CardContent>
       </Card>
 

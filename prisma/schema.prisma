@@ -25,6 +25,7 @@ model User {
   expenses              Expense[]
   reminderLogs          ReminderLog[]
   weightLogs            WeightLog[]
+  telegramConnectionCodes TelegramConnectionCode[]
 }
 
 model EmailVerificationToken {
@@ -37,6 +38,19 @@ model EmailVerificationToken {
   createdAt           DateTime @default(now())
 
   @@index([email])
+  @@index([expiresAt])
+}
+
+model TelegramConnectionCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
   @@index([expiresAt])
 }
 

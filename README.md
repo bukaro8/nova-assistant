@@ -96,13 +96,26 @@ Start the Telegram expense listener:
 npm run telegram:expense
 ```
 
-Start the development server:
+Start only the web development server:
 
 ```bash
 npm run dev
 ```
 
 Open http://localhost:3000.
+
+Start the web app and local Telegram workers together:
+
+```bash
+npm run dev:all
+```
+
+This runs the web app, habit bot listener, expense bot listener, and habit scheduler with log prefixes:
+
+- `web`
+- `habit`
+- `expense`
+- `scheduler`
 
 ## Dashboard
 
@@ -325,6 +338,32 @@ Open the local database browser with:
 npm run db:studio
 ```
 
+## Telegram Account Linking
+
+Every authenticated NOVA user can connect their own Telegram chats from `/settings`.
+
+Flow:
+
+1. Open Settings.
+2. In the Telegram card, click `Connect Telegram`.
+3. NOVA shows a six-character connection code.
+4. Send that code to the Telegram bot you want to connect.
+5. Generate another code if you also want to connect the second Telegram bot.
+
+Connection codes:
+
+- expire after 10 minutes
+- are one-time use
+- are stored hashed in the database
+- never delete existing habit, expense, or weight data
+
+The Settings Telegram card also supports:
+
+- `Disconnect Telegram`
+- `Send test message`
+
+Disconnected Telegram chats cannot log habits or expenses until they are linked again.
+
 ## Telegram Habit Bot
 
 The habit bot supports reply logging and scheduled reminder sending. It uses polling for development.
@@ -369,7 +408,7 @@ The listener uses Telegram polling via `getUpdates`.
 
 Standalone Telegram scripts load `.env` through Node's `--env-file=.env` flag.
 
-When the first valid reply arrives, NOVA saves the Telegram chat ID to the first unclaimed user if `telegramHabitChatId` is empty. A proper Telegram connect flow will be added later.
+Habit replies only work after the user connects their Telegram chat from Settings.
 
 ### Start Reminder Scheduler
 
@@ -450,7 +489,7 @@ This calls Telegram `getMe` for `TELEGRAM_EXPENSE_BOT_TOKEN`.
 npm run telegram:expense
 ```
 
-When the first valid expense arrives, NOVA saves the Telegram chat ID to the first unclaimed user if `telegramExpenseChatId` is empty. A proper Telegram connect flow will be added later.
+Expense messages only work after the user connects their Telegram chat from Settings.
 
 ### Expense Message Formats
 
@@ -523,6 +562,19 @@ npm run dev
 
 Then open http://localhost:3000/dashboard.
 
+For local Telegram testing, use:
+
+```bash
+npm run dev:all
+```
+
+In production, do not run all processes in one command. Run the web app and each Telegram worker as separate services/processes:
+
+- web app: `npm run start`
+- habit listener: `npm run telegram:habit`
+- expense listener: `npm run telegram:expense`
+- habit scheduler: `npm run telegram:habit:scheduler`
+
 Current dashboard scope:
 
 - Real habit completion count for today
@@ -576,6 +628,7 @@ npx prisma migrate deploy
 
 ```bash
 npm run dev
+npm run dev:all
 npm run build
 npm run lint
 npm run db:validate
@@ -583,7 +636,6 @@ npm run db:migrate -- --name describe_the_change
 npm run db:generate
 npm run db:seed
 npm run db:studio
-npm run dev
 npm run telegram:expense:test
 npm run telegram:expense
 npm run telegram:habit:test

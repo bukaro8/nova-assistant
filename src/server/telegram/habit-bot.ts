@@ -5,9 +5,16 @@ import { pathToFileURL } from "node:url";
 import { prisma } from "../db/prisma";
 import {
   requireHabitBotToken,
+  sendTelegramMessage,
   type TelegramUser,
   telegramRequest,
 } from "./api";
+import {
+  claimTelegramConnectionCode,
+  extractTelegramStartCode,
+  looksLikeTelegramConnectionCode,
+  normalizeTelegramConnectionCode,
+} from "./linking";
 
 type TelegramChat = {
   id: number;
@@ -50,7 +57,7 @@ function getLocalDayRange(date: Date) {
   return { start, end };
 }
 
-async function findOrClaimUser(chatId: string) {
+async function findLinkedUser(chatId: string) {
   const existingUser = await prisma.user.findUnique({
     where: {
       telegramHabitChatId: chatId,
@@ -66,42 +73,8 @@ async function findOrClaimUser(chatId: string) {
     return existingUser;
   }
 
-  debug("No user found for telegramHabitChatId; looking for unclaimed user.", {
-    chatId,
-  });
-
-  const unclaimedUser = await prisma.user.findFirst({
-    where: {
-      telegramHabitChatId: null,
-    },
-    orderBy: {
-      createdAt: "asc",
-    },
-  });
-
-  if (!unclaimedUser) {
-    debug("No unclaimed user available for Telegram habit chat.", {
-      chatId,
-    });
-    return null;
-  }
-
-  const claimedUser = await prisma.user.update({
-    where: {
-      id: unclaimedUser.id,
-    },
-    data: {
-      telegramHabitChatId: chatId,
-    },
-  });
-
-  debug("User claimed for Telegram habit chat.", {
-    chatId,
-    userId: claimedUser.id,
-    email: claimedUser.email,
-  });
-
-  return claimedUser;
+  debug("No user found for telegramHabitChatId.", { chatId });
+  return null;
 }
 
 async function logHabitReply(message: TelegramMessage) {
@@ -120,10 +93,84 @@ async function logHabitReply(message: TelegramMessage) {
     return;
   }
 
-  const user = await findOrClaimUser(chatId);
+  const startCode = extractTelegramStartCode(replyText);
+
+  if (startCode) {
+    const result = await claimTelegramConnectionCode({
+      chatId,
+      code: startCode,
+      kind: "habit",
+    });
+
+    if (result.status === "linked") {
+      await sendTelegramMessage(
+        chatId,
+        "✅ Telegram connected to NOVA habit reminders.",
+      );
+      console.log(
+        `Linked Telegram habit chat ${chatId} to ${result.user.email}.`,
+      );
+      return;
+    }
+
+    if (result.status === "already-linked") {
+      await sendTelegramMessage(
+        chatId,
+        "This Telegram account is already connected to another NOVA account.",
+      );
+      console.warn(`Telegram habit chat ${chatId} is already linked elsewhere.`);
+      return;
+    }
+
+    await sendTelegramMessage(
+      chatId,
+      "❌ Invalid or expired NOVA connection code. Generate a new code in Settings.",
+    );
+    console.warn(`Invalid Telegram habit /start connection code from chat ${chatId}.`);
+    return;
+  }
+
+  const user = await findLinkedUser(chatId);
 
   if (!user) {
+    if (looksLikeTelegramConnectionCode(replyText)) {
+      const result = await claimTelegramConnectionCode({
+        chatId,
+        code: normalizeTelegramConnectionCode(replyText),
+        kind: "habit",
+      });
+
+      if (result.status === "linked") {
+        await sendTelegramMessage(
+          chatId,
+          "✅ Telegram connected to NOVA habit reminders.",
+        );
+        console.log(`Linked Telegram habit chat ${chatId} to ${result.user.email}.`);
+        return;
+      }
+
+      if (result.status === "already-linked") {
+        await sendTelegramMessage(
+          chatId,
+          "This Telegram account is already connected to another NOVA account.",
+        );
+        console.warn(`Telegram habit chat ${chatId} is already linked elsewhere.`);
+        return;
+      }
+
+      await sendTelegramMessage(
+        chatId,
+        "❌ Invalid or expired NOVA connection code. Generate a new code in Settings.",
+      );
+      console.warn(`Invalid Telegram habit connection code from chat ${chatId}.`);
+      return;
+    }
+
     console.warn(`No NOVA user available for Telegram habit chat ${chatId}.`);
+    await sendTelegramMessage(
+      chatId,
+      "Connect this chat from NOVA Settings before logging habits.",
+    );
     return;
   }
 

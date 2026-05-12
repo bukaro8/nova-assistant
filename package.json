@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:all": "concurrently --names web,habit,expense,scheduler --prefix-colors cyan,green,magenta,yellow \"npm run dev\" \"npm run telegram:habit\" \"npm run telegram:expense\" \"npm run telegram:habit:scheduler\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -49,6 +50,7 @@
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "prisma": "^7.8.0",
