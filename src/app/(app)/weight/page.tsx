@@ -1,5 +1,6 @@
 import { Target } from "lucide-react";
 
+import { AssistantDisabledCard } from "@/components/assistant-disabled-card";
 import { WeightTrendChart } from "@/components/weight-trend-chart";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,6 +50,16 @@ function StatCard({
 
 export default async function WeightPage() {
   const user = await requireCurrentUser();
+
+  if (!user.assistantWeight) {
+    return (
+      <AssistantDisabledCard
+        title="Weight assistant is disabled"
+        description="Enable weight tracking when you want NOVA to track progress and body trends."
+      />
+    );
+  }
+
   const logs = await prisma.weightLog.findMany({
     where: {
       userId: user.id,

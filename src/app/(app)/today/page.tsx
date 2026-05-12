@@ -1,5 +1,6 @@
 import { CheckCircle2, Circle, Plus, Scale, WalletCards } from "lucide-react";
 
+import { AssistantDisabledCard } from "@/components/assistant-disabled-card";
 import { HabitToast } from "@/components/habit-manage-controls";
 import { Button } from "@/components/ui/button";
 import {
@@ -79,6 +80,16 @@ function formatRelativeMinutes(minutes: number) {
 
 export default async function TodayPage() {
   const user = await requireCurrentUser();
+
+  if (!user.assistantHabits) {
+    return (
+      <AssistantDisabledCard
+        title="Habits assistant is disabled"
+        description="Enable habits when you want NOVA to manage reminders, streaks and routines."
+      />
+    );
+  }
+
   const today = getUkDayRange();
   const week = getCurrentUkWeekRange();
   const todayClock = getUkClock();
@@ -235,26 +246,30 @@ export default async function TodayPage() {
       </Card>
 
       <section className="grid gap-3 sm:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Today spending</CardTitle>
-            <CardDescription>Logged today</CardDescription>
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold">
-            {formatCurrency(todaySpend, user.currency)}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Latest weight</CardTitle>
-            <CardDescription>
-              {latestWeight ? formatUkDate(latestWeight.createdAt) : "No logs yet"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold">
-            {latestWeight ? `${Number(latestWeight.weight).toFixed(1)} kg` : "No data"}
-          </CardContent>
-        </Card>
+        {user.assistantExpenses ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Today spending</CardTitle>
+              <CardDescription>Logged today</CardDescription>
+            </CardHeader>
+            <CardContent className="text-2xl font-semibold">
+              {formatCurrency(todaySpend, user.currency)}
+            </CardContent>
+          </Card>
+        ) : null}
+        {user.assistantWeight ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Latest weight</CardTitle>
+              <CardDescription>
+                {latestWeight ? formatUkDate(latestWeight.createdAt) : "No logs yet"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="text-2xl font-semibold">
+              {latestWeight ? `${Number(latestWeight.weight).toFixed(1)} kg` : "No data"}
+            </CardContent>
+          </Card>
+        ) : null}
         <Card>
           <CardHeader>
             <CardTitle>Best streak</CardTitle>
@@ -325,34 +340,37 @@ export default async function TodayPage() {
       </Card>
 
       <section className="grid gap-3 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Scale className="size-5 text-primary" />
-              Quick add weight
-            </CardTitle>
-            <CardDescription>Date defaults to today.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={saveWeight} className="space-y-3">
-              <input
-                className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                inputMode="decimal"
-                name="weight"
-                placeholder="82.5"
-                required
-                type="number"
-                step="0.1"
-              />
-              <Button className="h-12 w-full rounded-xl" type="submit">
-                <Plus className="size-4" />
-                Save weight
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+        {user.assistantWeight ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Scale className="size-5 text-primary" />
+                Quick add weight
+              </CardTitle>
+              <CardDescription>Date defaults to today.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form action={saveWeight} className="space-y-3">
+                <input
+                  className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  inputMode="decimal"
+                  name="weight"
+                  placeholder="82.5"
+                  required
+                  type="number"
+                  step="0.1"
+                />
+                <Button className="h-12 w-full rounded-xl" type="submit">
+                  <Plus className="size-4" />
+                  Save weight
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        ) : null}
 
-        <Card>
+        {user.assistantExpenses ? (
+          <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <WalletCards className="size-5 text-primary" />
@@ -396,6 +414,7 @@ export default async function TodayPage() {
             </form>
           </CardContent>
         </Card>
+        ) : null}
       </section>
     </div>
   );

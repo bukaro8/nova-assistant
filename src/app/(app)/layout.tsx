@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { AppBottomNav } from "@/components/app-bottom-nav";
 import { authOptions } from "@/server/auth/options";
+import { requireCurrentUser } from "@/server/dashboard/user";
 
 export default async function AppLayout({
   children,
@@ -15,9 +16,17 @@ export default async function AppLayout({
     redirect("/login");
   }
 
+  const user = await requireCurrentUser();
+
   return (
     <div className="min-h-screen">
-      <AppBottomNav />
+      <AppBottomNav
+        preferences={{
+          assistantHabits: user.assistantHabits,
+          assistantWeight: user.assistantWeight,
+          assistantExpenses: user.assistantExpenses,
+        }}
+      />
       <main className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:pl-60 md:pr-8 md:pt-8">
         {children}
       </main>

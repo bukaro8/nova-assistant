@@ -445,6 +445,34 @@ export async function updateCurrencyPreference(formData: FormData) {
   redirect(`/settings?${params.toString()}`);
 }
 
+export async function updateAssistantPreferences(formData: FormData) {
+  const user = await requireCurrentUser();
+
+  await prisma.user.update({
+    where: {
+      id: user.id,
+    },
+    data: {
+      assistantHabits: formData.get("assistantHabits") === "on",
+      assistantWeight: formData.get("assistantWeight") === "on",
+      assistantExpenses: formData.get("assistantExpenses") === "on",
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/expenses");
+  revalidatePath("/habits");
+  revalidatePath("/settings");
+  revalidatePath("/today");
+  revalidatePath("/weight");
+
+  const params = new URLSearchParams({
+    type: "success",
+    message: "Assistants updated",
+  });
+  redirect(`/settings?${params.toString()}`);
+}
+
 function parseExpenseForm(formData: FormData) {
   const rawAmount = String(formData.get("amount") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();

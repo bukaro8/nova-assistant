@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AssistantDisabledCard } from "@/components/assistant-disabled-card";
 import { CategoryBreakdownChart } from "@/components/category-breakdown-chart";
 import { HabitToast } from "@/components/habit-manage-controls";
 import { Button } from "@/components/ui/button";
@@ -174,6 +175,16 @@ export default async function ExpensesPage({
   const params = await searchParams;
   const filter = getFilter(params.filter);
   const user = await requireCurrentUser();
+
+  if (!user.assistantExpenses) {
+    return (
+      <AssistantDisabledCard
+        title="Expense assistant is disabled"
+        description="Enable expense tracking when you want NOVA to track spending and categories."
+      />
+    );
+  }
+
   const week = getCurrentUkWeekRange();
   const month = getCurrentUkMonthRange();
   const filterRange =

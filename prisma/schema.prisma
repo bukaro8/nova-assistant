@@ -14,6 +14,9 @@ model User {
   passwordHash          String?
   currency              String        @default("GBP")
   targetWeight          Decimal?      @db.Decimal(5, 2)
+  assistantHabits       Boolean       @default(true)
+  assistantWeight       Boolean       @default(false)
+  assistantExpenses     Boolean       @default(false)
   telegramHabitChatId   String?       @unique
   telegramExpenseChatId String?       @unique
   createdAt             DateTime      @default(now())

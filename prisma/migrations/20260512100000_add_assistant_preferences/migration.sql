@@ -1,0 +1,3 @@
+ALTER TABLE "User" ADD COLUMN "assistantHabits" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "User" ADD COLUMN "assistantWeight" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "User" ADD COLUMN "assistantExpenses" BOOLEAN NOT NULL DEFAULT false;

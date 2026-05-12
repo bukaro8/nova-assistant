@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { ArrowUpRight, Dumbbell, UserCircle, WalletCards } from "lucide-react";
+import {
+  ArrowUpRight,
+  Dumbbell,
+  ReceiptText,
+  Scale,
+  UserCircle,
+  WalletCards,
+} from "lucide-react";
 
 import { LogoutButton } from "@/components/auth/logout-button";
 import { HabitToast } from "@/components/habit-manage-controls";
@@ -12,7 +19,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { currencyOptions } from "@/lib/currency";
-import { updateCurrencyPreference } from "@/server/dashboard/actions";
+import {
+  updateAssistantPreferences,
+  updateCurrencyPreference,
+} from "@/server/dashboard/actions";
 import { requireCurrentUser } from "@/server/dashboard/user";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +66,70 @@ export default async function SettingsPage() {
             </label>
             <Button className="h-11 w-full rounded-2xl" type="submit">
               Save currency
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Assistants</CardTitle>
+          <CardDescription>Choose what NOVA helps you with.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={updateAssistantPreferences} className="space-y-3">
+            {[
+              {
+                name: "assistantHabits",
+                title: "Habits & reminders",
+                description: "Daily reminders, streaks and routines",
+                icon: Dumbbell,
+                defaultChecked: user.assistantHabits,
+              },
+              {
+                name: "assistantWeight",
+                title: "Weight tracking",
+                description: "Track progress and body trends",
+                icon: Scale,
+                defaultChecked: user.assistantWeight,
+              },
+              {
+                name: "assistantExpenses",
+                title: "Expense tracking",
+                description: "Track spending and categories",
+                icon: ReceiptText,
+                defaultChecked: user.assistantExpenses,
+              },
+            ].map((assistant) => {
+              const Icon = assistant.icon;
+
+              return (
+                <label
+                  key={assistant.name}
+                  className="flex min-h-20 cursor-pointer items-center gap-3 rounded-3xl border border-border bg-background p-4 transition-colors hover:bg-muted"
+                >
+                  <input
+                    className="size-5 accent-primary"
+                    defaultChecked={assistant.defaultChecked}
+                    name={assistant.name}
+                    type="checkbox"
+                  />
+                  <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary">
+                    <Icon className="size-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium text-foreground">
+                      {assistant.title}
+                    </span>
+                    <span className="mt-1 block text-sm text-muted-foreground">
+                      {assistant.description}
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+            <Button className="h-11 w-full rounded-2xl" type="submit">
+              Save assistants
             </Button>
           </form>
         </CardContent>

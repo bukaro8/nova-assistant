@@ -314,250 +314,284 @@ export default async function DashboardPage() {
         ))}
       </section>
 
-      <Card className="overflow-hidden border-primary/20 bg-[linear-gradient(135deg,color-mix(in_oklch,var(--primary)_34%,transparent),color-mix(in_oklch,var(--accent)_22%,transparent)_55%,var(--card))]">
-        <CardContent className="p-5">
-          <div className="flex items-center justify-between gap-5">
-            <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 rounded-full bg-background/25 px-3 py-1 text-xs font-medium">
-                <Sparkles className="size-4" />
-                Daily score
-              </div>
-              <div>
-                <div className="text-5xl font-semibold tracking-tight">
-                  {score}%
+      {user.assistantHabits ? (
+        <Card className="overflow-hidden border-primary/20 bg-[linear-gradient(135deg,color-mix(in_oklch,var(--primary)_34%,transparent),color-mix(in_oklch,var(--accent)_22%,transparent)_55%,var(--card))]">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between gap-5">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 rounded-full bg-background/25 px-3 py-1 text-xs font-medium">
+                  <Sparkles className="size-4" />
+                  Daily score
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {doneTotal} complete · {Math.max(0, habitTotal - doneTotal)} pending today
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {weeklyCompletionPercent}% weekly consistency · Best streak{" "}
-                  {bestCurrentStreak > 0
-                    ? `${bestCurrentStreak} days`
-                    : "No streak yet"}
-                </p>
-              </div>
-            </div>
-            <div className="grid size-24 place-items-center rounded-full border border-primary/35 bg-background/25 text-2xl font-semibold shadow-inner">
-              {doneTotal}/{habitTotal}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex-row items-center justify-between gap-3">
-          <div>
-            <CardTitle>Weekly habits</CardTitle>
-            <CardDescription>Monday to Sunday</CardDescription>
-          </div>
-          <Dumbbell className="size-6 text-primary" />
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {weekHabits.map((habit) => {
-            const Icon = getHabitIconOption(habit.icon).icon;
-            const colour = getHabitColourOption(habit.colour);
-            const scheduledToday = habit.scheduleDays.includes(clock.dayCode);
-            const completed = completedToday.has(habit.id);
-            const action = toggleHabitDone.bind(null, habit.id, "/dashboard");
-            const stats = getHabitStats({
-              habit,
-              logs: habitStatsLogs,
-              weekDays: weekStatDays,
-              todayDateKey: today.dateKey,
-            });
-
-            return (
-              <div
-                key={habit.id}
-                className="rounded-3xl border border-border bg-background/25 p-3"
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`grid size-11 shrink-0 place-items-center rounded-2xl ${colour.icon}`}
-                  >
-                    <Icon className="size-5" />
+                <div>
+                  <div className="text-5xl font-semibold tracking-tight">
+                    {score}%
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="truncate font-medium">{habit.name}</div>
-                      <div className="text-sm font-semibold">
-                        {formatWeeklyProgress(
-                          stats.weeklyCompletedCount,
-                          stats.weeklyTotal,
-                        )}
-                      </div>
-                    </div>
-                    <div className="mt-2 grid grid-cols-7 gap-1.5">
-                      {weekStrip.map((day) => {
-                        const scheduled = habit.scheduleDays.includes(day.dayCode);
-                        const done = weeklyDoneKeys.has(`${habit.id}:${day.dateKey}`);
-
-                        return (
-                          <div
-                            key={`${habit.id}-${day.dateKey}`}
-                            className={`h-2 rounded-full ${
-                              done
-                                ? colour.progress
-                                : scheduled
-                                  ? "bg-muted"
-                                  : "bg-transparent"
-                            }`}
-                          />
-                        );
-                      })}
-                    </div>
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      {formatStreak(stats.currentStreak)} · Longest{" "}
-                      {stats.longestStreak > 0
-                        ? `${stats.longestStreak} days`
-                        : "Start today"}
-                    </div>
-                    {stats.perfectWeekSoFar ? (
-                      <div className="mt-2 text-xs font-medium text-primary">
-                        Perfect week so far
-                      </div>
-                    ) : null}
-                    {scheduledToday ? (
-                      <form action={action} className="mt-3">
-                        <Button
-                          className="h-10 w-full rounded-2xl"
-                          type="submit"
-                          variant={completed ? "outline" : "default"}
-                        >
-                          {completed ? "Undo" : "Mark done"}
-                        </Button>
-                      </form>
-                    ) : null}
-                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {doneTotal} complete · {Math.max(0, habitTotal - doneTotal)} pending today
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {weeklyCompletionPercent}% weekly consistency · Best streak{" "}
+                    {bestCurrentStreak > 0
+                      ? `${bestCurrentStreak} days`
+                      : "No streak yet"}
+                  </p>
                 </div>
               </div>
-            );
-          })}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex-row items-center justify-between gap-3">
-          <div>
-            <CardTitle>Expenses</CardTitle>
-            <CardDescription>
-              Week of {formatShortUkDate(week.start)}
-            </CardDescription>
-          </div>
-          <ReceiptText className="size-6 text-primary" />
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <div className="text-4xl font-semibold tracking-tight">
-                {formatCurrency(weekTotal, user.currency)}
+              <div className="grid size-24 place-items-center rounded-full border border-primary/35 bg-background/25 text-2xl font-semibold shadow-inner">
+                {doneTotal}/{habitTotal}
               </div>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {biggestCategory
-                  ? `Biggest category: ${biggestCategory[0]}`
-                  : "No spending recorded this week."}
-              </p>
             </div>
-            {biggestCategory ? (
-              <div className="rounded-2xl bg-primary/15 px-3 py-2 text-sm font-semibold text-primary">
-                {formatCurrency(biggestCategory[1], user.currency)}
-              </div>
-            ) : null}
-          </div>
-          <WeeklySpendingChart data={chartData} currency={user.currency} />
-          <Link
-            href="/expenses"
-            className="flex h-11 items-center justify-center rounded-2xl border border-border bg-background text-sm font-medium transition-colors hover:bg-muted"
-          >
-            View expenses
-            <ArrowUpRight className="ml-2 size-4" />
-          </Link>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : null}
 
-      <Card>
-        <CardHeader className="flex-row items-center justify-between gap-3">
-          <div>
-            <CardTitle>Weight</CardTitle>
-            <CardDescription>Current progress</CardDescription>
-          </div>
-          <Scale className="size-6 text-primary" />
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-end justify-between gap-3">
+      {user.assistantHabits ? (
+        <Card>
+          <CardHeader className="flex-row items-center justify-between gap-3">
             <div>
-              <div className="text-4xl font-semibold tracking-tight">
-                {latestWeight ? `${latestWeight.weight.toFixed(1)} kg` : "No data"}
-              </div>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {weeklyWeightChangeLabel ??
-                  "Add more logs to see your weekly trend."}
-              </p>
+              <CardTitle>Weekly habits</CardTitle>
+              <CardDescription>Monday to Sunday</CardDescription>
             </div>
-            {weeklyWeightChangeLabel ? (
-              <div
-                className={`rounded-2xl px-3 py-2 text-sm font-semibold ${
-                  weeklyWeightChange !== null && weeklyWeightChange <= 0
-                    ? "bg-emerald-400/15 text-emerald-300"
-                    : "bg-orange-400/15 text-orange-300"
-                }`}
-              >
-                {weeklyWeightChangeLabel}
-              </div>
-            ) : null}
-          </div>
-          {goalProgress && targetWeight ? (
-            <div className="space-y-2 rounded-2xl border border-border bg-background/40 p-3">
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-muted-foreground">
-                  {goalProgress.reached
-                    ? "Goal reached"
-                    : `${goalProgress.remaining.toFixed(1)} kg to goal`}
-                </span>
-                <span className="font-medium">
-                  {Math.round(goalProgress.progress)}%
-                </span>
-              </div>
-              <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+            <Dumbbell className="size-6 text-primary" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {weekHabits.map((habit) => {
+              const Icon = getHabitIconOption(habit.icon).icon;
+              const colour = getHabitColourOption(habit.colour);
+              const scheduledToday = habit.scheduleDays.includes(clock.dayCode);
+              const completed = completedToday.has(habit.id);
+              const action = toggleHabitDone.bind(null, habit.id, "/dashboard");
+              const stats = getHabitStats({
+                habit,
+                logs: habitStatsLogs,
+                weekDays: weekStatDays,
+                todayDateKey: today.dateKey,
+              });
+
+              return (
                 <div
-                  className="h-full rounded-full bg-primary"
-                  style={{ width: `${goalProgress.progress}%` }}
-                />
-              </div>
+                  key={habit.id}
+                  className="rounded-3xl border border-border bg-background/25 p-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`grid size-11 shrink-0 place-items-center rounded-2xl ${colour.icon}`}
+                    >
+                      <Icon className="size-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="truncate font-medium">{habit.name}</div>
+                        <div className="text-sm font-semibold">
+                          {formatWeeklyProgress(
+                            stats.weeklyCompletedCount,
+                            stats.weeklyTotal,
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-2 grid grid-cols-7 gap-1.5">
+                        {weekStrip.map((day) => {
+                          const scheduled = habit.scheduleDays.includes(day.dayCode);
+                          const done = weeklyDoneKeys.has(`${habit.id}:${day.dateKey}`);
+
+                          return (
+                            <div
+                              key={`${habit.id}-${day.dateKey}`}
+                              className={`h-2 rounded-full ${
+                                done
+                                  ? colour.progress
+                                  : scheduled
+                                    ? "bg-muted"
+                                    : "bg-transparent"
+                              }`}
+                            />
+                          );
+                        })}
+                      </div>
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {formatStreak(stats.currentStreak)} · Longest{" "}
+                        {stats.longestStreak > 0
+                          ? `${stats.longestStreak} days`
+                          : "Start today"}
+                      </div>
+                      {stats.perfectWeekSoFar ? (
+                        <div className="mt-2 text-xs font-medium text-primary">
+                          Perfect week so far
+                        </div>
+                      ) : null}
+                      {scheduledToday ? (
+                        <form action={action} className="mt-3">
+                          <Button
+                            className="h-10 w-full rounded-2xl"
+                            type="submit"
+                            variant={completed ? "outline" : "default"}
+                          >
+                            {completed ? "Undo" : "Mark done"}
+                          </Button>
+                        </form>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {user.assistantExpenses ? (
+        <Card>
+          <CardHeader className="flex-row items-center justify-between gap-3">
+            <div>
+              <CardTitle>Expenses</CardTitle>
+              <CardDescription>
+                Week of {formatShortUkDate(week.start)}
+              </CardDescription>
             </div>
-          ) : null}
-          <WeightTrendChart data={weightTrendData} />
-          <Link
-            href="/weight"
-            className="flex h-11 items-center justify-center rounded-2xl border border-border bg-background text-sm font-medium transition-colors hover:bg-muted"
-          >
-            View weight
-            <ArrowUpRight className="ml-2 size-4" />
-          </Link>
-        </CardContent>
-      </Card>
+            <ReceiptText className="size-6 text-primary" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <div className="text-4xl font-semibold tracking-tight">
+                  {formatCurrency(weekTotal, user.currency)}
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {biggestCategory
+                    ? `Biggest category: ${biggestCategory[0]}`
+                    : "No spending recorded this week."}
+                </p>
+              </div>
+              {biggestCategory ? (
+                <div className="rounded-2xl bg-primary/15 px-3 py-2 text-sm font-semibold text-primary">
+                  {formatCurrency(biggestCategory[1], user.currency)}
+                </div>
+              ) : null}
+            </div>
+            <WeeklySpendingChart data={chartData} currency={user.currency} />
+            <Link
+              href="/expenses"
+              className="flex h-11 items-center justify-center rounded-2xl border border-border bg-background text-sm font-medium transition-colors hover:bg-muted"
+            >
+              View expenses
+              <ArrowUpRight className="ml-2 size-4" />
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {user.assistantWeight ? (
+        <Card>
+          <CardHeader className="flex-row items-center justify-between gap-3">
+            <div>
+              <CardTitle>Weight</CardTitle>
+              <CardDescription>Current progress</CardDescription>
+            </div>
+            <Scale className="size-6 text-primary" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <div className="text-4xl font-semibold tracking-tight">
+                  {latestWeight ? `${latestWeight.weight.toFixed(1)} kg` : "No data"}
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {weeklyWeightChangeLabel ??
+                    "Add more logs to see your weekly trend."}
+                </p>
+              </div>
+              {weeklyWeightChangeLabel ? (
+                <div
+                  className={`rounded-2xl px-3 py-2 text-sm font-semibold ${
+                    weeklyWeightChange !== null && weeklyWeightChange <= 0
+                      ? "bg-emerald-400/15 text-emerald-300"
+                      : "bg-orange-400/15 text-orange-300"
+                  }`}
+                >
+                  {weeklyWeightChangeLabel}
+                </div>
+              ) : null}
+            </div>
+            {goalProgress && targetWeight ? (
+              <div className="space-y-2 rounded-2xl border border-border bg-background/40 p-3">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">
+                    {goalProgress.reached
+                      ? "Goal reached"
+                      : `${goalProgress.remaining.toFixed(1)} kg to goal`}
+                  </span>
+                  <span className="font-medium">
+                    {Math.round(goalProgress.progress)}%
+                  </span>
+                </div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${goalProgress.progress}%` }}
+                  />
+                </div>
+              </div>
+            ) : null}
+            <WeightTrendChart data={weightTrendData} />
+            <Link
+              href="/weight"
+              className="flex h-11 items-center justify-center rounded-2xl border border-border bg-background text-sm font-medium transition-colors hover:bg-muted"
+            >
+              View weight
+              <ArrowUpRight className="ml-2 size-4" />
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {!user.assistantHabits &&
+      !user.assistantWeight &&
+      !user.assistantExpenses ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>No assistants enabled</CardTitle>
+            <CardDescription>
+              Choose what NOVA helps you with from Settings.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link
+              href="/settings"
+              className="flex h-11 items-center justify-center rounded-2xl border border-border bg-background text-sm font-medium transition-colors hover:bg-muted"
+            >
+              Open Settings
+              <ArrowUpRight className="ml-2 size-4" />
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <section className="grid grid-cols-2 gap-3">
-        <Link
-          href="/habits"
-          className="flex min-h-24 flex-col justify-between rounded-3xl border border-border bg-card/80 p-4 shadow-sm backdrop-blur transition-colors hover:bg-muted"
-        >
-          <Dumbbell className="size-6 text-primary" />
-          <span className="flex items-center justify-between text-sm font-medium">
-            Habits
-            <ArrowUpRight className="size-4" />
-          </span>
-        </Link>
-        <Link
-          href="/weight"
-          className="flex min-h-24 flex-col justify-between rounded-3xl border border-border bg-card/80 p-4 shadow-sm backdrop-blur transition-colors hover:bg-muted"
-        >
-          <Plus className="size-6 text-primary" />
-          <span className="flex items-center justify-between text-sm font-medium">
-            Add weight
-            <ArrowUpRight className="size-4" />
-          </span>
-        </Link>
+        {user.assistantHabits ? (
+          <Link
+            href="/habits"
+            className="flex min-h-24 flex-col justify-between rounded-3xl border border-border bg-card/80 p-4 shadow-sm backdrop-blur transition-colors hover:bg-muted"
+          >
+            <Dumbbell className="size-6 text-primary" />
+            <span className="flex items-center justify-between text-sm font-medium">
+              Habits
+              <ArrowUpRight className="size-4" />
+            </span>
+          </Link>
+        ) : null}
+        {user.assistantWeight ? (
+          <Link
+            href="/weight"
+            className="flex min-h-24 flex-col justify-between rounded-3xl border border-border bg-card/80 p-4 shadow-sm backdrop-blur transition-colors hover:bg-muted"
+          >
+            <Plus className="size-6 text-primary" />
+            <span className="flex items-center justify-between text-sm font-medium">
+              Add weight
+              <ArrowUpRight className="size-4" />
+            </span>
+          </Link>
+        ) : null}
       </section>
     </div>
   );
