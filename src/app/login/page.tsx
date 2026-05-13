@@ -62,6 +62,14 @@ export default async function LoginPage({
               <span className="h-px flex-1 bg-border" />
             </div>
             <LoginForm callbackUrl={callbackUrl} defaultEmail={params.email} />
+            <p className="text-center text-sm">
+              <Link
+                className="font-medium text-foreground underline"
+                href="/forgot-password"
+              >
+                Forgot password?
+              </Link>
+            </p>
             <p className="text-center text-sm text-muted-foreground">
               New to NOVA?{" "}
               <Link className="font-medium text-foreground underline" href="/register">
