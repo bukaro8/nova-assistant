@@ -13,19 +13,38 @@ type TelegramResponse<T> = {
   description?: string;
 };
 
-const token = process.env.TELEGRAM_HABIT_BOT_TOKEN?.trim();
+const novaToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+const token =
+  novaToken ||
+  process.env.TELEGRAM_HABIT_BOT_TOKEN?.trim() ||
+  process.env.TELEGRAM_EXPENSE_BOT_TOKEN?.trim();
 const apiBaseUrl = token ? `https://api.telegram.org/bot${token}` : "";
-const expenseToken = process.env.TELEGRAM_EXPENSE_BOT_TOKEN?.trim();
+const expenseToken =
+  novaToken ||
+  process.env.TELEGRAM_EXPENSE_BOT_TOKEN?.trim() ||
+  process.env.TELEGRAM_HABIT_BOT_TOKEN?.trim();
 const expenseApiBaseUrl = expenseToken
   ? `https://api.telegram.org/bot${expenseToken}`
   : "";
+const tokenEnvName = novaToken
+  ? "TELEGRAM_BOT_TOKEN"
+  : process.env.TELEGRAM_HABIT_BOT_TOKEN?.trim()
+    ? "TELEGRAM_HABIT_BOT_TOKEN"
+    : "TELEGRAM_EXPENSE_BOT_TOKEN";
+const expenseTokenEnvName = novaToken
+  ? "TELEGRAM_BOT_TOKEN"
+  : process.env.TELEGRAM_EXPENSE_BOT_TOKEN?.trim()
+    ? "TELEGRAM_EXPENSE_BOT_TOKEN"
+    : "TELEGRAM_HABIT_BOT_TOKEN";
 
 export function requireHabitBotToken() {
   if (!token) {
     throw new Error(
       [
-        "TELEGRAM_HABIT_BOT_TOKEN is missing.",
+        "TELEGRAM_BOT_TOKEN or TELEGRAM_HABIT_BOT_TOKEN is missing.",
         "Add it to .env, then run one of:",
+        "  npm run telegram:nova:test",
+        "  npm run telegram:nova",
         "  npm run telegram:habit:test",
         "  npm run telegram:habit",
         "  npm run telegram:habit:scheduler",
@@ -38,8 +57,10 @@ export function requireExpenseBotToken() {
   if (!expenseToken) {
     throw new Error(
       [
-        "TELEGRAM_EXPENSE_BOT_TOKEN is missing.",
+        "TELEGRAM_BOT_TOKEN or TELEGRAM_EXPENSE_BOT_TOKEN is missing.",
         "Add it to .env, then run one of:",
+        "  npm run telegram:nova:test",
+        "  npm run telegram:nova",
         "  npm run telegram:expense:test",
         "  npm run telegram:expense",
       ].join("\n"),
@@ -88,7 +109,7 @@ export async function telegramRequest<T>(
 
   return requestTelegram<T>(
     apiBaseUrl,
-    "TELEGRAM_HABIT_BOT_TOKEN",
+    tokenEnvName,
     method,
     body,
   );
@@ -102,7 +123,7 @@ export async function telegramExpenseRequest<T>(
 
   return requestTelegram<T>(
     expenseApiBaseUrl,
-    "TELEGRAM_EXPENSE_BOT_TOKEN",
+    expenseTokenEnvName,
     method,
     body,
   );

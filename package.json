@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:all": "concurrently --names web,habit,expense,scheduler --prefix-colors cyan,green,magenta,yellow \"npm run dev\" \"npm run telegram:habit\" \"npm run telegram:expense\" \"npm run telegram:habit:scheduler\"",
+    "dev:all": "concurrently --names web,nova,scheduler --prefix-colors cyan,green,yellow \"npm run dev\" \"npm run telegram:nova\" \"npm run telegram:habit:scheduler\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -22,6 +22,9 @@
     "telegram:habit:prod": "node --import tsx src/server/telegram/habit-bot.ts",
     "telegram:habit:scheduler": "node --env-file=.env --import tsx src/server/telegram/habit-scheduler.ts",
     "telegram:habit:test": "node --env-file=.env --import tsx src/server/telegram/habit-bot.ts --test",
+    "telegram:nova": "node --env-file=.env --import tsx src/server/telegram/nova-bot.ts",
+    "telegram:nova:prod": "node --import tsx src/server/telegram/nova-bot.ts",
+    "telegram:nova:test": "node --env-file=.env --import tsx src/server/telegram/nova-bot.ts --test",
     "telegram:scheduler:prod": "node --import tsx src/server/telegram/habit-scheduler.ts"
   },
   "engines": {

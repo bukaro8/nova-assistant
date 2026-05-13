@@ -7,7 +7,7 @@ const CODE_LENGTH = 6;
 const CODE_TTL_MINUTES = 10;
 const CODE_PATTERN = /^[A-Z0-9]{6}$/;
 
-export type TelegramConnectionKind = "habit" | "expense";
+export type TelegramConnectionKind = "habit" | "expense" | "nova";
 
 export function normalizeTelegramConnectionCode(value: string) {
   return value.trim().toUpperCase().replace(/\s+/g, "");
@@ -120,17 +120,30 @@ export async function claimTelegramConnectionCode({
   const chatIdField =
     kind === "habit" ? "telegramHabitChatId" : "telegramExpenseChatId";
   const existingChatUser =
-    kind === "habit"
-      ? await prisma.user.findUnique({
+    kind === "nova"
+      ? await prisma.user.findFirst({
           where: {
-            telegramHabitChatId: chatId,
+            OR: [
+              {
+                telegramHabitChatId: chatId,
+              },
+              {
+                telegramExpenseChatId: chatId,
+              },
+            ],
           },
         })
-      : await prisma.user.findUnique({
-          where: {
-            telegramExpenseChatId: chatId,
-          },
-        });
+      : kind === "habit"
+        ? await prisma.user.findUnique({
+            where: {
+              telegramHabitChatId: chatId,
+            },
+          })
+        : await prisma.user.findUnique({
+            where: {
+              telegramExpenseChatId: chatId,
+            },
+          });
 
   if (existingChatUser && existingChatUser.id !== pendingCode.userId) {
     return {
@@ -144,7 +157,14 @@ export async function claimTelegramConnectionCode({
         id: pendingCode.userId,
       },
       data: {
-        [chatIdField]: chatId,
+        ...(kind === "nova"
+          ? {
+              telegramHabitChatId: chatId,
+              telegramExpenseChatId: chatId,
+            }
+          : {
+              [chatIdField]: chatId,
+            }),
         telegramConnectionCodes: {
           update: {
             where: {

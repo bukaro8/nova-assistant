@@ -15,10 +15,7 @@ import {
   getUtcForUkDateInput,
 } from "@/server/dashboard/date-utils";
 import { requireCurrentUser } from "@/server/dashboard/user";
-import {
-  sendExpenseTelegramMessage,
-  sendTelegramMessage,
-} from "@/server/telegram/api";
+import { sendTelegramMessage } from "@/server/telegram/api";
 import { createTelegramConnectionCode } from "@/server/telegram/linking";
 
 const VALID_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
@@ -513,31 +510,16 @@ export async function disconnectTelegram() {
 
 export async function sendTelegramTestMessage() {
   const user = await requireCurrentUser();
-  const sends: Array<Promise<unknown>> = [];
+  const chatId = user.telegramHabitChatId ?? user.telegramExpenseChatId;
 
-  if (user.telegramHabitChatId) {
-    sends.push(
-      sendTelegramMessage(
-        user.telegramHabitChatId,
-        "NOVA test message: your habit bot is connected.",
-      ),
-    );
-  }
-
-  if (user.telegramExpenseChatId) {
-    sends.push(
-      sendExpenseTelegramMessage(
-        user.telegramExpenseChatId,
-        "NOVA test message: your expense bot is connected.",
-      ),
-    );
-  }
-
-  if (sends.length === 0) {
+  if (!chatId) {
     redirect("/settings?type=error&message=Telegram is not connected");
   }
 
-  await Promise.all(sends);
+  await sendTelegramMessage(
+    chatId,
+    "NOVA test message: your assistant is connected.",
+  );
 
   redirect("/settings?type=success&message=Telegram test message sent");
 }

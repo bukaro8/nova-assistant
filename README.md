@@ -72,31 +72,19 @@ Open Prisma Studio:
 npm run db:studio
 ```
 
-Test the Telegram habit bot connection:
+Test the NOVA Telegram bot connection:
 
 ```bash
-npm run telegram:habit:test
+npm run telegram:nova:test
 ```
 
-Start the Telegram habit reply listener:
+Start the unified NOVA Telegram listener:
 
 ```bash
-npm run telegram:habit
+npm run telegram:nova
 ```
 
 Local Telegram scripts load `.env` with Node's `--env-file=.env` flag.
-
-Test the Telegram expense bot connection:
-
-```bash
-npm run telegram:expense:test
-```
-
-Start the Telegram expense listener:
-
-```bash
-npm run telegram:expense
-```
 
 Start only the web development server:
 
@@ -112,11 +100,10 @@ Start the web app and local Telegram workers together:
 npm run dev:all
 ```
 
-This runs the web app, habit bot listener, expense bot listener, and habit scheduler with log prefixes:
+This runs the web app, NOVA Telegram listener, and habit scheduler with log prefixes:
 
 - `web`
-- `habit`
-- `expense`
+- `nova`
 - `scheduler`
 
 ## Dashboard
@@ -275,7 +262,7 @@ Validation rules:
 - `validReplies` cannot overlap with another habit for the same user
 - `scheduleDays` must contain at least one day
 
-The Telegram habit listener, reminder scheduler, `/dashboard`, and `/habits` all read from the database habit records. New active habits work without changing code.
+The NOVA Telegram listener, reminder scheduler, `/dashboard`, and `/habits` all read from the database habit records. New active habits work without changing code.
 
 ## Database
 
@@ -295,8 +282,8 @@ GOOGLE_CLIENT_ID="your_google_oauth_client_id"
 GOOGLE_CLIENT_SECRET="your_google_oauth_client_secret"
 RESEND_API_KEY="your_resend_api_key"
 EMAIL_FROM="NOVA <hello@your-domain.com>"
-TELEGRAM_HABIT_BOT_TOKEN="your_botfather_token"
-TELEGRAM_EXPENSE_BOT_TOKEN="your_expense_botfather_token"
+TELEGRAM_BOT_TOKEN="your_botfather_token"
+TELEGRAM_BOT_USERNAME="mynovaassistant_bot"
 ```
 
 ### Migrations
@@ -342,15 +329,14 @@ npm run db:studio
 
 ## Telegram Account Linking
 
-Every authenticated NOVA user can connect their own Telegram chats from `/settings`.
+Every authenticated NOVA user can connect the unified NOVA Telegram assistant from `/settings`.
 
 Flow:
 
 1. Open Settings.
-2. In the Telegram card, click `Connect Telegram`.
-3. NOVA shows a six-character connection code.
-4. Send `/start CODE` to the Telegram bot you want to connect, replacing `CODE` with the code shown in NOVA.
-5. Generate another code if you also want to connect the second Telegram bot.
+2. In the Connect NOVA Assistant card, click `Connect Telegram`.
+3. Click `Connect with Telegram`.
+4. Telegram opens automatically. Press `START` to finish connecting.
 
 Connection codes:
 
@@ -368,27 +354,33 @@ Disconnected Telegram chats cannot log habits or expenses until they are linked 
 
 ### Local Telegram Test Flow
 
-Run the web app and local Telegram workers together:
+Add the unified bot token to `.env`:
+
+```bash
+TELEGRAM_BOT_TOKEN="your_botfather_token"
+TELEGRAM_BOT_USERNAME="mynovaassistant_bot"
+```
+
+Then run the web app and local Telegram workers together:
 
 ```bash
 npm run dev:all
 ```
 
-Then test both bots:
+Test the assistant:
 
 1. Open `http://localhost:3000/settings`.
 2. Click `Connect Telegram`.
-3. Send `/start CODE` to the habit bot.
-4. Generate a new code in Settings.
-5. Send `/start CODE` to the expense bot.
-6. Send `Study` to the habit bot and expect `✅ Study logged for today.`
-7. Send `15.48 aldi` to the expense bot and expect an expense confirmation.
+3. Click `Connect with Telegram` and press `START`.
+4. Send `Study` and expect `✅ Study logged for today.`
+5. Send `15.48 aldi` and expect an expense confirmation.
+6. Send `/help` to see examples.
 
-Use a fresh connection code for each bot because codes are one-time use.
+The old `TELEGRAM_HABIT_BOT_TOKEN` and `TELEGRAM_EXPENSE_BOT_TOKEN` variables are still supported as temporary fallbacks for older scripts.
 
-## Telegram Habit Bot
+## NOVA Telegram Bot
 
-The habit bot supports reply logging and scheduled reminder sending. It uses polling for development.
+The unified Telegram bot supports account linking, habit reply logging, expense logging, and help messages. It uses polling for development.
 
 ### BotFather Setup
 
@@ -399,13 +391,14 @@ The habit bot supports reply logging and scheduled reminder sending. It uses pol
 5. Add it to `.env`:
 
 ```bash
-TELEGRAM_HABIT_BOT_TOKEN="your_botfather_token"
+TELEGRAM_BOT_TOKEN="your_botfather_token"
+TELEGRAM_BOT_USERNAME="mynovaassistant_bot"
 ```
 
 ### Test Bot Connection
 
 ```bash
-npm run telegram:habit:test
+npm run telegram:nova:test
 ```
 
 This calls Telegram `getMe` and prints the connected bot name.
@@ -418,19 +411,19 @@ Polling cannot receive updates while a webhook is configured for the same bot. I
 npm run telegram:habit:delete-webhook
 ```
 
-This loads `.env` and calls Telegram `deleteWebhook` for `TELEGRAM_HABIT_BOT_TOKEN`.
+This loads `.env` and calls Telegram `deleteWebhook` using `TELEGRAM_BOT_TOKEN` or the deprecated habit token fallback.
 
 ### Start Reply Listener
 
 ```bash
-npm run telegram:habit
+npm run telegram:nova
 ```
 
 The listener uses Telegram polling via `getUpdates`.
 
 Standalone Telegram scripts load `.env` through Node's `--env-file=.env` flag.
 
-Habit replies only work after the user connects their Telegram chat from Settings.
+Habit and expense replies only work after the user connects Telegram from Settings.
 
 ### Start Reminder Scheduler
 
@@ -452,14 +445,6 @@ Every send creates a `ReminderLog` with:
 
 `ReminderLog` prevents the same reminder from being sent twice for the same user, habit, scheduled minute, and reminder type.
 
-### Run Listener And Scheduler Together
-
-```bash
-npm run telegram:habit:dev
-```
-
-This starts the reply listener and reminder scheduler in the same Node process.
-
 ### Test Scheduler Without Waiting
 
 You can run one scheduler pass with a fake UK time and day:
@@ -472,11 +457,15 @@ That tests the Study reminder path immediately. To test duplicate prevention, ru
 
 ### Test Replies
 
-Send one of these messages to your habit bot in Telegram:
+Send these messages to the NOVA bot in Telegram:
 
 ```text
 study
 Study
+15.48 aldi
+5 coffee
+-100 salary
+/help
 ```
 
 `study` or `Study` logs the Study habit. Replies are matched case-insensitively.
@@ -485,33 +474,9 @@ The original seeded habits share `done`, `skip`, and `missed`, so those replies 
 
 If the same habit is logged more than once on the same local day, NOVA updates the existing `HabitLog` row instead of creating a duplicate.
 
-## Telegram Expense Bot
+## Deprecated Separate Telegram Bot Scripts
 
-The expense bot supports Telegram polling and rule-based expense parsing. It does not use AI categorisation yet.
-
-### BotFather Setup
-
-Create a second Telegram bot with `@BotFather`, then add its token to `.env`:
-
-```bash
-TELEGRAM_EXPENSE_BOT_TOKEN="your_expense_botfather_token"
-```
-
-### Test Bot Connection
-
-```bash
-npm run telegram:expense:test
-```
-
-This calls Telegram `getMe` for `TELEGRAM_EXPENSE_BOT_TOKEN`.
-
-### Start Expense Listener
-
-```bash
-npm run telegram:expense
-```
-
-Expense messages only work after the user connects their Telegram chat from Settings.
+The older habit-only and expense-only listeners still exist for fallback/local debugging, but production should run `npm run telegram:nova:prod`.
 
 ### Expense Message Formats
 
@@ -593,11 +558,10 @@ npm run dev:all
 In production, do not run all processes in one command. Run the web app and each Telegram worker as separate services/processes:
 
 - web app: `npm run start`
-- habit listener: `npm run telegram:habit:prod`
-- expense listener: `npm run telegram:expense:prod`
+- NOVA Telegram listener: `npm run telegram:nova:prod`
 - habit scheduler: `npm run telegram:scheduler:prod`
 
-Production scripts do not read a `.env` file. Coolify should inject `DATABASE_URL`, Telegram tokens, Auth.js secrets, and other environment variables at runtime.
+Production scripts do not read a `.env` file. Coolify should inject `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, Auth.js secrets, and other environment variables at runtime.
 
 Current dashboard scope:
 
@@ -634,8 +598,8 @@ In Coolify:
 
 ```bash
 DATABASE_URL="postgresql://..."
-TELEGRAM_HABIT_BOT_TOKEN="your_botfather_token"
-TELEGRAM_EXPENSE_BOT_TOKEN="your_expense_botfather_token"
+TELEGRAM_BOT_TOKEN="your_botfather_token"
+TELEGRAM_BOT_USERNAME="mynovaassistant_bot"
 ```
 
 Do not commit `.env` or paste secrets into the Dockerfile. `.dockerignore` excludes local environment files from the build context.

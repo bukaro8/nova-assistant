@@ -34,7 +34,13 @@ import { requireCurrentUser } from "@/server/dashboard/user";
 
 export const dynamic = "force-dynamic";
 
-const telegramAssistantUrl = "https://t.me/mynovaassistant_bot";
+function getTelegramAssistantUrl() {
+  const username =
+    process.env.TELEGRAM_BOT_USERNAME?.trim().replace(/^@/, "") ||
+    "mynovaassistant_bot";
+
+  return `https://t.me/${username}`;
+}
 
 export default async function SettingsPage({
   searchParams,
@@ -48,6 +54,7 @@ export default async function SettingsPage({
   const telegramConnected = Boolean(
     user.telegramHabitChatId || user.telegramExpenseChatId,
   );
+  const telegramAssistantUrl = getTelegramAssistantUrl();
   const telegramConnectUrl = params.telegramCode
     ? `${telegramAssistantUrl}?start=${encodeURIComponent(params.telegramCode)}`
     : null;
