@@ -83,7 +83,9 @@ function buildReminderMessage({
     return "";
   }
 
-  return [`Have you ${actionText.trim()} ${icon}?`, `Reply: ${code}`].join(
+  const cleanActionText = actionText.trim().replace(/[?？]+$/u, "").trim();
+
+  return [`Have you ${cleanActionText} ${icon}?`, `Reply: ${code}`].join(
     "\n",
   );
 }
