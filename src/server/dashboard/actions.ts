@@ -51,8 +51,18 @@ function parseList(value: FormDataEntryValue | null) {
     .filter(Boolean);
 }
 
-function normaliseCode(value: FormDataEntryValue | null) {
-  return String(value ?? "").trim();
+function generateHabitCode(name: string) {
+  const firstWord = name
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)[0]
+    ?.replace(/[^a-z0-9]/g, "");
+
+  if (!firstWord) {
+    return "";
+  }
+
+  return firstWord.length <= 5 ? firstWord : firstWord.slice(0, 4);
 }
 
 function normaliseTime(value: FormDataEntryValue | null) {
@@ -97,13 +107,13 @@ function invalidForm(message = "Invalid form"): never {
 
 function parseHabitForm(formData: FormData): ParsedHabitForm {
   const name = String(formData.get("name") ?? "").trim();
-  const code = normaliseCode(formData.get("code"));
+  const code = generateHabitCode(name);
   const reminderMessage = String(formData.get("reminderMessage") ?? "").trim();
   const icon = String(formData.get("icon") ?? "circle").trim();
   const colour = String(formData.get("colour") ?? "emerald").trim();
   const reminderTime = normaliseTime(formData.get("reminderTime"));
   const retryTimes = parseList(formData.get("retryTimes"));
-  const validReplies = parseList(formData.get("validReplies"));
+  const validReplies = code ? [code] : [];
   const scheduleDays = parseScheduleDays(formData);
   const active = formData.get("active") === "on";
 
@@ -137,6 +147,20 @@ function parseHabitForm(formData: FormData): ParsedHabitForm {
     return {
       ok: false,
       error: "Invalid form",
+    };
+  }
+
+  if (retryTimes.includes(reminderTime)) {
+    return {
+      ok: false,
+      error: "Extra reminders cannot duplicate the main reminder time",
+    };
+  }
+
+  if (new Set(retryTimes).size !== retryTimes.length) {
+    return {
+      ok: false,
+      error: "Extra reminders cannot contain duplicates",
     };
   }
 

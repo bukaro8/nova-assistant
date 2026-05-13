@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, Plus } from "lucide-react";
 
+import { HabitForm } from "@/components/habit-form";
 import {
   setHabitActive,
   createHabit,
@@ -11,8 +12,6 @@ import {
 import {
   getHabitColourOption,
   getHabitIconOption,
-  habitColourOptions,
-  habitIconOptions,
 } from "@/lib/habits";
 import {
   ActiveToggle,
@@ -21,7 +20,6 @@ import {
 } from "@/components/habit-manage-controls";
 import { requireCurrentUser } from "@/server/dashboard/user";
 import { prisma } from "@/server/db/prisma";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -31,225 +29,6 @@ import {
 } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
-
-const weekDays = [
-  { code: "MON", label: "Mon" },
-  { code: "TUE", label: "Tue" },
-  { code: "WED", label: "Wed" },
-  { code: "THU", label: "Thu" },
-  { code: "FRI", label: "Fri" },
-  { code: "SAT", label: "Sat" },
-  { code: "SUN", label: "Sun" },
-];
-
-type HabitFormHabit = {
-  name: string;
-  code: string;
-  reminderMessage: string;
-  icon: string;
-  colour: string;
-  reminderTime: string;
-  retryTimes: string[];
-  validReplies: string[];
-  scheduleDays: string[];
-  active: boolean;
-};
-
-const fieldClass =
-  "mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
-const textAreaClass =
-  "mt-1 min-h-24 w-full rounded-2xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
-
-function Field({
-  label,
-  name,
-  defaultValue,
-  required,
-  type = "text",
-  placeholder,
-}: {
-  label: string;
-  name: string;
-  defaultValue?: string;
-  required?: boolean;
-  type?: string;
-  placeholder?: string;
-}) {
-  return (
-    <label className="block text-sm font-medium">
-      {label}
-      <input
-        className={fieldClass}
-        name={name}
-        defaultValue={defaultValue}
-        required={required}
-        type={type}
-        placeholder={placeholder}
-      />
-    </label>
-  );
-}
-
-function HabitForm({
-  action,
-  habit,
-  submitLabel,
-}: {
-  action: (formData: FormData) => void | Promise<void>;
-  habit?: HabitFormHabit;
-  submitLabel: string;
-}) {
-  const selectedDays = new Set(habit?.scheduleDays ?? []);
-  const selectedIcon = habit?.icon ?? "circle";
-  const selectedColour = habit?.colour ?? "emerald";
-
-  return (
-    <form action={action} className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field
-          label="Name"
-          name="name"
-          defaultValue={habit?.name}
-          required
-          placeholder="Study"
-        />
-        <Field
-          label="Code"
-          name="code"
-          defaultValue={habit?.code}
-          required
-          placeholder="Study"
-        />
-      </div>
-
-      <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">Icon</legend>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-          {habitIconOptions.map((option) => {
-            const Icon = option.icon;
-
-            return (
-              <label
-                key={option.value}
-                className="flex min-h-12 cursor-pointer items-center gap-2 rounded-2xl border border-border bg-background px-3 text-sm transition has-[:checked]:border-primary has-[:checked]:bg-primary/10"
-              >
-                <input
-                  className="sr-only"
-                  name="icon"
-                  type="radio"
-                  value={option.value}
-                  defaultChecked={selectedIcon === option.value}
-                />
-                <Icon className="size-4 text-primary" />
-                {option.label}
-              </label>
-            );
-          })}
-        </div>
-      </fieldset>
-
-      <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">Colour</legend>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {habitColourOptions.map((option) => (
-            <label
-              key={option.value}
-              className="flex min-h-12 cursor-pointer items-center gap-2 rounded-2xl border border-border bg-background px-3 text-sm transition has-[:checked]:border-primary has-[:checked]:bg-primary/10"
-            >
-              <input
-                className="sr-only"
-                name="colour"
-                type="radio"
-                value={option.value}
-                defaultChecked={selectedColour === option.value}
-              />
-              <span className={`size-4 rounded-full ${option.swatch}`} />
-              {option.label}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <label className="block text-sm font-medium">
-        Reminder message
-        <textarea
-          className={textAreaClass}
-          name="reminderMessage"
-          defaultValue={habit?.reminderMessage}
-          required
-          placeholder="Have you studied today? Reply: Study"
-        />
-      </label>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field
-          label="Reminder time"
-          name="reminderTime"
-          defaultValue={habit?.reminderTime}
-          required
-          type="time"
-        />
-        <Field
-          label="Retry times"
-          name="retryTimes"
-          defaultValue={habit?.retryTimes.join(", ")}
-          placeholder="16:00, 18:00"
-        />
-      </div>
-
-      <Field
-        label="Valid replies"
-        name="validReplies"
-        defaultValue={habit?.validReplies.join(", ")}
-        required
-        placeholder="study, Study"
-      />
-
-      <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">Schedule days</legend>
-        <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-          {weekDays.map((day) => (
-            <label
-              key={day.code}
-              className="flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-border bg-background px-2 text-sm"
-            >
-              <input
-                name="scheduleDays"
-                type="checkbox"
-                value={day.code}
-                defaultChecked={selectedDays.has(day.code)}
-                className="size-4 accent-primary"
-              />
-              {day.label}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      {habit ? (
-        <input
-          name="active"
-          type="hidden"
-          value={habit.active ? "on" : "off"}
-        />
-      ) : (
-        <label className="flex min-h-11 items-center gap-3 rounded-2xl border border-border bg-background px-3 text-sm font-medium">
-          <input
-            name="active"
-            type="checkbox"
-            defaultChecked
-            className="size-4 accent-primary"
-          />
-          Active
-        </label>
-      )}
-
-      <Button className="h-11 w-full rounded-2xl" type="submit">
-        {submitLabel}
-      </Button>
-    </form>
-  );
-}
 
 export default async function HabitSettingsPage() {
   const user = await requireCurrentUser();
