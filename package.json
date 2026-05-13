@@ -14,12 +14,15 @@
     "db:studio": "prisma studio",
     "db:validate": "prisma validate",
     "telegram:expense": "node --env-file=.env --import tsx src/server/telegram/expense-bot.ts",
+    "telegram:expense:prod": "node --import tsx src/server/telegram/expense-bot.ts",
     "telegram:expense:test": "node --env-file=.env --import tsx src/server/telegram/expense-bot.ts --test",
     "telegram:habit": "node --env-file=.env --import tsx src/server/telegram/habit-bot.ts",
     "telegram:habit:delete-webhook": "node --env-file=.env --import tsx src/server/telegram/habit-bot.ts --delete-webhook",
     "telegram:habit:dev": "node --env-file=.env --import tsx src/server/telegram/habit-dev.ts",
+    "telegram:habit:prod": "node --import tsx src/server/telegram/habit-bot.ts",
     "telegram:habit:scheduler": "node --env-file=.env --import tsx src/server/telegram/habit-scheduler.ts",
-    "telegram:habit:test": "node --env-file=.env --import tsx src/server/telegram/habit-bot.ts --test"
+    "telegram:habit:test": "node --env-file=.env --import tsx src/server/telegram/habit-bot.ts --test",
+    "telegram:scheduler:prod": "node --import tsx src/server/telegram/habit-scheduler.ts"
   },
   "engines": {
     "node": ">=22.12.0"

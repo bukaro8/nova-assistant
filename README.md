@@ -84,6 +84,8 @@ Start the Telegram habit reply listener:
 npm run telegram:habit
 ```
 
+Local Telegram scripts load `.env` with Node's `--env-file=.env` flag.
+
 Test the Telegram expense bot connection:
 
 ```bash
@@ -591,9 +593,11 @@ npm run dev:all
 In production, do not run all processes in one command. Run the web app and each Telegram worker as separate services/processes:
 
 - web app: `npm run start`
-- habit listener: `npm run telegram:habit`
-- expense listener: `npm run telegram:expense`
-- habit scheduler: `npm run telegram:habit:scheduler`
+- habit listener: `npm run telegram:habit:prod`
+- expense listener: `npm run telegram:expense:prod`
+- habit scheduler: `npm run telegram:scheduler:prod`
+
+Production scripts do not read a `.env` file. Coolify should inject `DATABASE_URL`, Telegram tokens, Auth.js secrets, and other environment variables at runtime.
 
 Current dashboard scope:
 
