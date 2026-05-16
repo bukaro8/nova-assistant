@@ -113,6 +113,20 @@ export type WeeklyReportGenerationResult =
       message: string;
     };
 
+export type SampleWeeklyAiReportResult =
+  | {
+      status: "stored";
+      reportId: string;
+      reportText: string;
+      model: string;
+      userId: string;
+    }
+  | {
+      status: "printed";
+      reportText: string;
+      model: string;
+    };
+
 function roundMoney(value: number) {
   return Math.round(value * 100) / 100;
 }
@@ -274,6 +288,91 @@ function toAiWeeklyMetrics(metrics: WeeklyMetrics): AiWeeklyMetrics {
         categoryLabel: expense.categoryLabel,
         date: expense.date,
       })),
+    },
+  };
+}
+
+function buildSampleAiWeeklyMetrics({
+  currency,
+  date = new Date(),
+}: {
+  currency: string;
+  date?: Date;
+}): { week: { start: Date; end: Date }; metrics: AiWeeklyMetrics } {
+  const week = getWeekRangeForTimeZone(date, DEFAULT_REPORT_TIME_ZONE);
+
+  return {
+    week,
+    metrics: {
+      week: {
+        start: week.start.toISOString(),
+        end: week.end.toISOString(),
+        mondayDateKey: week.mondayDateKey,
+        timeZone: DEFAULT_REPORT_TIME_ZONE,
+      },
+      currency,
+      enabledAssistants: {
+        habits: true,
+        expenses: true,
+        weight: true,
+      },
+      hasEnabledAssistants: true,
+      meaningfulActivity: true,
+      expenses: {
+        count: 12,
+        totalSpent: 184.35,
+        spendByCategory: [
+          { category: "GROCERIES", label: "Groceries", total: 76.4 },
+          { category: "FOOD", label: "Food", total: 44.2 },
+          { category: "TRANSPORT", label: "Transport", total: 31.75 },
+          { category: "SHOPPING", label: "Shopping", total: 32 },
+        ],
+        dailySpending: [
+          { key: week.mondayDateKey, label: "Mon", total: 18.5 },
+          { key: "", label: "Tue", total: 0 },
+          { key: "", label: "Wed", total: 42.3 },
+          { key: "", label: "Thu", total: 11.25 },
+          { key: "", label: "Fri", total: 67.1 },
+          { key: "", label: "Sat", total: 45.2 },
+          { key: "", label: "Sun", total: 0 },
+        ],
+        topExpenses: [
+          {
+            rank: 1,
+            amount: 42.3,
+            category: "GROCERIES",
+            categoryLabel: "Groceries",
+            date: "Wednesday",
+          },
+          {
+            rank: 2,
+            amount: 31.75,
+            category: "TRANSPORT",
+            categoryLabel: "Transport",
+            date: "Friday",
+          },
+          {
+            rank: 3,
+            amount: 28,
+            category: "FOOD",
+            categoryLabel: "Food",
+            date: "Saturday",
+          },
+        ],
+      },
+      habits: {
+        activeCount: 4,
+        scheduledCompletions: 22,
+        completed: 16,
+        completionPercent: 73,
+      },
+      weight: {
+        enabled: true,
+        logCount: 3,
+        firstKg: 82.4,
+        latestKg: 81.9,
+        changeKg: -0.5,
+      },
     },
   };
 }
@@ -667,5 +766,83 @@ export async function generateWeeklyAiReportsForDueUsers({
   return {
     total: users.length,
     ...results,
+  };
+}
+
+export async function generateSampleWeeklyAiReportForDevelopment({
+  userId,
+  date = new Date(),
+}: {
+  userId?: string;
+  date?: Date;
+} = {}): Promise<SampleWeeklyAiReportResult> {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Sample weekly AI reports are disabled in production.");
+  }
+
+  const user = userId
+    ? await prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+        select: {
+          id: true,
+          currency: true,
+        },
+      })
+    : await prisma.user.findFirst({
+        orderBy: {
+          createdAt: "asc",
+        },
+        select: {
+          id: true,
+          currency: true,
+        },
+      });
+  const { week, metrics } = buildSampleAiWeeklyMetrics({
+    currency: user?.currency ?? "GBP",
+    date,
+  });
+  const insight = await generateWeeklyReportInsight(metrics);
+
+  if (!user) {
+    return {
+      status: "printed",
+      reportText: insight.text,
+      model: insight.model,
+    };
+  }
+
+  const report = await prisma.weeklyAiReport.upsert({
+    where: {
+      userId_weekStart: {
+        userId: user.id,
+        weekStart: week.start,
+      },
+    },
+    create: {
+      userId: user.id,
+      weekStart: week.start,
+      weekEnd: week.end,
+      metricsJson: metrics as unknown as Prisma.InputJsonValue,
+      reportText: insight.text,
+      model: insight.model,
+      regeneratedAt: new Date(),
+    },
+    update: {
+      weekEnd: week.end,
+      metricsJson: metrics as unknown as Prisma.InputJsonValue,
+      reportText: insight.text,
+      model: insight.model,
+      regeneratedAt: new Date(),
+    },
+  });
+
+  return {
+    status: "stored",
+    reportId: report.id,
+    reportText: report.reportText,
+    model: report.model,
+    userId: user.id,
   };
 }

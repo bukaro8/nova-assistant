@@ -3,7 +3,10 @@ import "dotenv/config";
 import { pathToFileURL } from "node:url";
 
 import { prisma } from "../db/prisma";
-import { generateWeeklyAiReportsForDueUsers } from "../reports/weekly-ai-report";
+import {
+  generateSampleWeeklyAiReportForDevelopment,
+  generateWeeklyAiReportsForDueUsers,
+} from "../reports/weekly-ai-report";
 import { requireHabitBotToken, sendTelegramMessage } from "./api";
 
 const UK_TIME_ZONE = "Europe/London";
@@ -421,6 +424,23 @@ async function processDueWeeklyReports() {
   });
 }
 
+async function processSampleWeeklyReport() {
+  const result = await generateSampleWeeklyAiReportForDevelopment({
+    userId: getCliValue("--user-id"),
+  });
+
+  if (result.status === "stored") {
+    console.log(
+      `Sample weekly AI report stored for local user ${result.userId} as ${result.reportId}.`,
+    );
+  } else {
+    console.log("Sample weekly AI report generated without a local user.");
+  }
+
+  console.log("");
+  console.log(result.reportText);
+}
+
 async function processScheduledWork() {
   await processDueReminders();
   await processDueWeeklyReports();
@@ -473,7 +493,16 @@ if (isMainModule()) {
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
 
-  if (process.argv.includes("--weekly-reports-once")) {
+  if (process.argv.includes("--weekly-reports-sample")) {
+    processSampleWeeklyReport()
+      .catch((error) => {
+        console.error("[telegram:habit:scheduler] Caught error.", error);
+        process.exit(1);
+      })
+      .finally(async () => {
+        await prisma.$disconnect();
+      });
+  } else if (process.argv.includes("--weekly-reports-once")) {
     processDueWeeklyReports()
       .catch((error) => {
         console.error("[telegram:habit:scheduler] Caught error.", error);
