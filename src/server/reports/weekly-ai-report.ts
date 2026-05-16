@@ -1,0 +1,671 @@
+import type { ExpenseCategory, Prisma, WeeklyAiReport } from "@/generated/prisma/client";
+
+import { generateWeeklyReportInsight } from "@/server/ai/openai";
+import { prisma } from "@/server/db/prisma";
+import { getExpenseCategoryLabel } from "@/server/expenses/categorise-expense";
+
+export const DEFAULT_REPORT_TIME_ZONE = "Europe/London";
+export const MANUAL_REGENERATION_INTERVAL_MS = 6 * 60 * 60 * 1000;
+export const WEEKLY_REPORT_FALLBACK =
+  "NOVA could not generate an AI insight report right now. Your weekly metrics are still available below.";
+
+const DAY_MS = 86_400_000;
+const WEEK_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
+
+type WeekDay = (typeof WEEK_DAYS)[number];
+
+type UserWithAssistants = {
+  id: string;
+  email?: string | null;
+  currency: string;
+  assistantHabits: boolean;
+  assistantWeight: boolean;
+  assistantExpenses: boolean;
+  timeZone?: string | null;
+};
+
+export type WeeklyMetrics = {
+  week: {
+    start: string;
+    end: string;
+    mondayDateKey: string;
+    timeZone: string;
+  };
+  currency: string;
+  enabledAssistants: {
+    habits: boolean;
+    expenses: boolean;
+    weight: boolean;
+  };
+  hasEnabledAssistants: boolean;
+  meaningfulActivity: boolean;
+  expenses: {
+    count: number;
+    totalSpent: number;
+    spendByCategory: Array<{
+      category: ExpenseCategory | "UNCATEGORISED";
+      label: string;
+      total: number;
+    }>;
+    dailySpending: Array<{
+      key: string;
+      label: string;
+      total: number;
+    }>;
+    topExpenses: Array<{
+      id: string;
+      description: string;
+      amount: number;
+      category: ExpenseCategory | null;
+      categoryLabel: string;
+      date: string;
+    }>;
+  };
+  habits: {
+    activeCount: number;
+    scheduledCompletions: number;
+    completed: number;
+    completionPercent: number;
+  };
+  weight: {
+    enabled: boolean;
+    logCount: number;
+    firstKg: number | null;
+    latestKg: number | null;
+    changeKg: number | null;
+  };
+};
+
+type AiWeeklyMetrics = Omit<WeeklyMetrics, "expenses"> & {
+  expenses: Omit<WeeklyMetrics["expenses"], "topExpenses"> & {
+    topExpenses: Array<{
+      rank: number;
+      amount: number;
+      category: ExpenseCategory | null;
+      categoryLabel: string;
+      date: string;
+    }>;
+  };
+};
+
+export type WeeklyReportState = {
+  user: UserWithAssistants;
+  week: {
+    start: Date;
+    end: Date;
+    mondayDateKey: string;
+    timeZone: string;
+  };
+  metrics: WeeklyMetrics;
+  report: WeeklyAiReport | null;
+};
+
+export type WeeklyReportGenerationResult =
+  | {
+      status: "stored" | "existing";
+      report: WeeklyAiReport;
+      metrics: WeeklyMetrics;
+    }
+  | {
+      status: "skipped" | "fallback" | "rate-limited";
+      report: WeeklyAiReport | null;
+      metrics: WeeklyMetrics;
+      message: string;
+    };
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function parseDateKey(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+
+  if (!year || !month || !day) {
+    throw new Error(`Invalid date key: ${dateKey}`);
+  }
+
+  return { year, month, day };
+}
+
+function getZonedClock(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    weekday: "short",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value;
+
+  const weekday = value("weekday");
+  const year = value("year");
+  const month = value("month");
+  const day = value("day");
+  const hour = value("hour");
+  const minute = value("minute");
+
+  if (!weekday || !year || !month || !day || !hour || !minute) {
+    throw new Error(`Failed to read date in ${timeZone}.`);
+  }
+
+  return {
+    dateKey: `${year}-${month}-${day}`,
+    dayCode: weekday.slice(0, 3).toUpperCase() as WeekDay,
+    time: `${hour}:${minute}`,
+  };
+}
+
+function getUtcForZonedLocal(dateKey: string, time: string, timeZone: string) {
+  const { year, month, day } = parseDateKey(dateKey);
+  const [hour, minute] = time.split(":").map(Number);
+
+  if (
+    hour === undefined ||
+    minute === undefined ||
+    Number.isNaN(hour) ||
+    Number.isNaN(minute)
+  ) {
+    throw new Error(`Invalid time: ${time}`);
+  }
+
+  const assumedUtc = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  const zonedClock = getZonedClock(assumedUtc, timeZone);
+  const formatted = parseDateKey(zonedClock.dateKey);
+  const formattedUtcMinutes =
+    Date.UTC(
+      formatted.year,
+      formatted.month - 1,
+      formatted.day,
+      Number(zonedClock.time.slice(0, 2)),
+      Number(zonedClock.time.slice(3, 5)),
+    ) / 60_000;
+  const wantedUtcMinutes =
+    Date.UTC(year, month - 1, day, hour, minute) / 60_000;
+
+  return new Date(
+    assumedUtc.getTime() + (wantedUtcMinutes - formattedUtcMinutes) * 60_000,
+  );
+}
+
+function getNextDateKey(dateKey: string, timeZone: string) {
+  const { year, month, day } = parseDateKey(dateKey);
+
+  return getZonedClock(
+    new Date(Date.UTC(year, month - 1, day + 1, 12)),
+    timeZone,
+  ).dateKey;
+}
+
+function getReportTimeZone(user: { timeZone?: string | null }) {
+  return user.timeZone || DEFAULT_REPORT_TIME_ZONE;
+}
+
+export function getWeekRangeForTimeZone(date = new Date(), timeZone = DEFAULT_REPORT_TIME_ZONE) {
+  const today = getZonedClock(date, timeZone);
+  const dayOffset = WEEK_DAYS.indexOf(today.dayCode);
+  const middayToday = new Date(`${today.dateKey}T12:00:00.000Z`);
+  const mondayDateKey = getZonedClock(
+    new Date(middayToday.getTime() - dayOffset * DAY_MS),
+    timeZone,
+  ).dateKey;
+  let afterSundayDateKey = mondayDateKey;
+
+  for (let index = 0; index < 7; index += 1) {
+    afterSundayDateKey = getNextDateKey(afterSundayDateKey, timeZone);
+  }
+
+  return {
+    start: getUtcForZonedLocal(mondayDateKey, "00:00", timeZone),
+    end: getUtcForZonedLocal(afterSundayDateKey, "00:00", timeZone),
+    mondayDateKey,
+    timeZone,
+  };
+}
+
+export function getWeekChartDaysForTimeZone(start: Date, timeZone = DEFAULT_REPORT_TIME_ZONE) {
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(start.getTime() + index * DAY_MS);
+
+    return {
+      key: getZonedClock(new Date(date.getTime() + 12 * 60 * 60 * 1000), timeZone)
+        .dateKey,
+      label: new Intl.DateTimeFormat("en-GB", {
+        timeZone,
+        weekday: "short",
+      }).format(date),
+      total: 0,
+    };
+  });
+}
+
+export function formatReportDate(date: Date, timeZone = DEFAULT_REPORT_TIME_ZONE) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+export function formatShortReportDate(date: Date, timeZone = DEFAULT_REPORT_TIME_ZONE) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    day: "2-digit",
+    month: "short",
+  }).format(date);
+}
+
+function toAiWeeklyMetrics(metrics: WeeklyMetrics): AiWeeklyMetrics {
+  // Privacy boundary: metricsJson and OpenAI input must stay sanitised.
+  // Do not include raw descriptions, IDs, notes, or personal record text here.
+  return {
+    ...metrics,
+    expenses: {
+      ...metrics.expenses,
+      topExpenses: metrics.expenses.topExpenses.map((expense, index) => ({
+        rank: index + 1,
+        amount: expense.amount,
+        category: expense.category,
+        categoryLabel: expense.categoryLabel,
+        date: expense.date,
+      })),
+    },
+  };
+}
+
+function hasEnabledAssistants(user: UserWithAssistants) {
+  return user.assistantHabits || user.assistantExpenses || user.assistantWeight;
+}
+
+async function findUserWithAssistants(userId: string) {
+  return prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    select: {
+      id: true,
+      email: true,
+      currency: true,
+      assistantHabits: true,
+      assistantExpenses: true,
+      assistantWeight: true,
+    },
+  });
+}
+
+export async function buildWeeklyMetrics(user: UserWithAssistants, date = new Date()) {
+  const timeZone = getReportTimeZone(user);
+  const week = getWeekRangeForTimeZone(date, timeZone);
+  const chartData = getWeekChartDaysForTimeZone(week.start, timeZone);
+  const weekDays = chartData.map((day) => ({
+    dateKey: day.key,
+    dayCode: getZonedClock(new Date(`${day.key}T12:00:00.000Z`), timeZone).dayCode,
+  }));
+
+  const [expenses, habits, habitLogs, weightLogs] = await Promise.all([
+    prisma.expense.findMany({
+      where: {
+        userId: user.id,
+        expenseDate: {
+          gte: week.start,
+          lt: week.end,
+        },
+      },
+      orderBy: {
+        expenseDate: "desc",
+      },
+    }),
+    prisma.habit.findMany({
+      where: {
+        userId: user.id,
+        active: true,
+      },
+      orderBy: {
+        reminderTime: "asc",
+      },
+    }),
+    prisma.habitLog.findMany({
+      where: {
+        userId: user.id,
+        status: "DONE",
+        loggedAt: {
+          gte: week.start,
+          lt: week.end,
+        },
+      },
+    }),
+    prisma.weightLog.findMany({
+      where: {
+        userId: user.id,
+        createdAt: {
+          gte: week.start,
+          lt: week.end,
+        },
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    }),
+  ]);
+
+  const positiveExpenses = expenses.filter((expense) => Number(expense.amount) > 0);
+  const categoryTotals = new Map<ExpenseCategory | "UNCATEGORISED", number>();
+
+  for (const expense of positiveExpenses) {
+    const amount = Number(expense.amount);
+    const category = expense.category ?? "UNCATEGORISED";
+    const key = getZonedClock(expense.expenseDate, timeZone).dateKey;
+    const chartPoint = chartData.find((day) => day.key === key);
+
+    if (chartPoint) {
+      chartPoint.total = roundMoney(chartPoint.total + amount);
+    }
+
+    categoryTotals.set(category, roundMoney((categoryTotals.get(category) ?? 0) + amount));
+  }
+
+  const completedHabitKeys = new Set(
+    habitLogs.map((log) => `${log.habitId}:${getZonedClock(log.loggedAt, timeZone).dateKey}`),
+  );
+  const scheduledHabitKeys = new Set<string>();
+
+  for (const habit of habits) {
+    for (const day of weekDays) {
+      if (habit.scheduleDays.includes(day.dayCode)) {
+        scheduledHabitKeys.add(`${habit.id}:${day.dateKey}`);
+      }
+    }
+  }
+
+  const habitCompletionTotal = scheduledHabitKeys.size;
+  const habitCompletionDone = Array.from(scheduledHabitKeys).filter((key) =>
+    completedHabitKeys.has(key),
+  ).length;
+  const habitCompletionPercent =
+    habitCompletionTotal === 0
+      ? 0
+      : Math.round((habitCompletionDone / habitCompletionTotal) * 100);
+  const firstWeight = weightLogs[0] ?? null;
+  const latestWeight = weightLogs.at(-1) ?? null;
+  const weightChange =
+    user.assistantWeight && firstWeight && latestWeight && weightLogs.length > 1
+      ? roundMoney(Number(latestWeight.weight) - Number(firstWeight.weight))
+      : null;
+  const expenseTotal = roundMoney(
+    positiveExpenses.reduce((total, expense) => total + Number(expense.amount), 0),
+  );
+  const meaningfulActivity =
+    positiveExpenses.length > 0 || habitLogs.length > 0 || weightLogs.length > 0;
+
+  return {
+    week,
+    metrics: {
+      week: {
+        start: week.start.toISOString(),
+        end: week.end.toISOString(),
+        mondayDateKey: week.mondayDateKey,
+        timeZone,
+      },
+      currency: user.currency,
+      enabledAssistants: {
+        habits: user.assistantHabits,
+        expenses: user.assistantExpenses,
+        weight: user.assistantWeight,
+      },
+      hasEnabledAssistants: hasEnabledAssistants(user),
+      meaningfulActivity,
+      expenses: {
+        count: positiveExpenses.length,
+        totalSpent: expenseTotal,
+        spendByCategory: Array.from(categoryTotals.entries())
+          .map(([category, total]) => ({
+            category,
+            label:
+              category === "UNCATEGORISED"
+                ? "Uncategorised"
+                : getExpenseCategoryLabel(category),
+            total,
+          }))
+          .sort((a, b) => b.total - a.total),
+        dailySpending: chartData,
+        topExpenses: positiveExpenses
+          .toSorted((a, b) => Number(b.amount) - Number(a.amount))
+          .slice(0, 5)
+          .map((expense) => ({
+            id: expense.id,
+            description: expense.description,
+            amount: Number(expense.amount),
+            category: expense.category,
+            categoryLabel: getExpenseCategoryLabel(expense.category),
+            date: formatReportDate(expense.expenseDate, timeZone),
+          })),
+      },
+      habits: {
+        activeCount: habits.length,
+        scheduledCompletions: habitCompletionTotal,
+        completed: habitCompletionDone,
+        completionPercent: habitCompletionPercent,
+      },
+      weight: {
+        enabled: user.assistantWeight,
+        logCount: weightLogs.length,
+        firstKg: firstWeight ? Number(firstWeight.weight) : null,
+        latestKg: latestWeight ? Number(latestWeight.weight) : null,
+        changeKg: weightChange,
+      },
+    } satisfies WeeklyMetrics,
+  };
+}
+
+export async function getCurrentWeeklyReportState(
+  userId: string,
+  date = new Date(),
+): Promise<WeeklyReportState> {
+  const user = await findUserWithAssistants(userId);
+
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
+  const { week, metrics } = await buildWeeklyMetrics(user, date);
+  const report = await prisma.weeklyAiReport.findUnique({
+    where: {
+      userId_weekStart: {
+        userId: user.id,
+        weekStart: week.start,
+      },
+    },
+  });
+
+  return {
+    user,
+    week,
+    metrics,
+    report,
+  };
+}
+
+function getSkipMessage(metrics: WeeklyMetrics) {
+  if (!metrics.hasEnabledAssistants) {
+    return "Weekly AI reports are skipped until at least one assistant is enabled.";
+  }
+
+  if (!metrics.meaningfulActivity) {
+    return "Weekly AI reports are skipped when there is no meaningful activity for the week.";
+  }
+
+  return null;
+}
+
+async function writeReport({
+  user,
+  week,
+  metrics,
+  regeneratedAt,
+}: {
+  user: UserWithAssistants;
+  week: { start: Date; end: Date };
+  metrics: WeeklyMetrics;
+  regeneratedAt?: Date | null;
+}) {
+  const aiMetrics = toAiWeeklyMetrics(metrics);
+  const insight = await generateWeeklyReportInsight(aiMetrics);
+  const data = {
+    weekEnd: week.end,
+    metricsJson: aiMetrics as unknown as Prisma.InputJsonValue,
+    reportText: insight.text,
+    model: insight.model,
+    regeneratedAt,
+  };
+
+  return prisma.weeklyAiReport.upsert({
+    where: {
+      userId_weekStart: {
+        userId: user.id,
+        weekStart: week.start,
+      },
+    },
+    create: {
+      userId: user.id,
+      weekStart: week.start,
+      ...data,
+    },
+    update: data,
+  });
+}
+
+export async function generateWeeklyAiReportForUser({
+  userId,
+  date = new Date(),
+  force = false,
+  manual = false,
+}: {
+  userId: string;
+  date?: Date;
+  force?: boolean;
+  manual?: boolean;
+}): Promise<WeeklyReportGenerationResult> {
+  const state = await getCurrentWeeklyReportState(userId, manual ? new Date() : date);
+  const skipMessage = getSkipMessage(state.metrics);
+
+  if (skipMessage) {
+    return {
+      status: "skipped",
+      report: state.report,
+      metrics: state.metrics,
+      message: skipMessage,
+    };
+  }
+
+  if (!force && state.report) {
+    return {
+      status: "existing",
+      report: state.report,
+      metrics: state.metrics,
+    };
+  }
+
+  if (manual && state.report?.regeneratedAt) {
+    const nextAllowedAt = new Date(
+      state.report.regeneratedAt.getTime() + MANUAL_REGENERATION_INTERVAL_MS,
+    );
+
+    if (nextAllowedAt.getTime() > Date.now()) {
+      return {
+        status: "rate-limited",
+        report: state.report,
+        metrics: state.metrics,
+        message: `You can regenerate this report after ${formatReportDate(nextAllowedAt, state.week.timeZone)} ${new Intl.DateTimeFormat("en-GB", {
+          timeZone: state.week.timeZone,
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        }).format(nextAllowedAt)}.`,
+      };
+    }
+  }
+
+  try {
+    const report = await writeReport({
+      user: state.user,
+      week: state.week,
+      metrics: state.metrics,
+      regeneratedAt: manual ? new Date() : state.report?.regeneratedAt ?? null,
+    });
+
+    return {
+      status: "stored",
+      report,
+      metrics: state.metrics,
+    };
+  } catch (error) {
+    console.error("[weekly-ai-report] Failed to generate report.", error);
+
+    return {
+      status: "fallback",
+      report: state.report,
+      metrics: state.metrics,
+      message: WEEKLY_REPORT_FALLBACK,
+    };
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function generateWeeklyAiReportsForDueUsers({
+  date = new Date(),
+  stagger = true,
+}: {
+  date?: Date;
+  stagger?: boolean;
+} = {}) {
+  const users = await prisma.user.findMany({
+    where: {
+      OR: [
+        { assistantHabits: true },
+        { assistantExpenses: true },
+        { assistantWeight: true },
+      ],
+    },
+    select: {
+      id: true,
+    },
+  });
+  const results: Record<WeeklyReportGenerationResult["status"], number> = {
+    stored: 0,
+    existing: 0,
+    skipped: 0,
+    fallback: 0,
+    "rate-limited": 0,
+  };
+
+  for (const user of users) {
+    if (stagger) {
+      await sleep(Math.floor(Math.random() * 30_000));
+    }
+
+    try {
+      const result = await generateWeeklyAiReportForUser({
+        userId: user.id,
+        date,
+      });
+
+      results[result.status] += 1;
+    } catch (error) {
+      results.fallback += 1;
+      console.error("[weekly-ai-report] Unexpected scheduled report error.", error);
+    }
+  }
+
+  return {
+    total: users.length,
+    ...results,
+  };
+}
