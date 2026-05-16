@@ -13,12 +13,38 @@ type OpenAiOutputItem = {
 };
 
 type OpenAiResponseBody = {
+  id?: string;
+  status?: string;
   output_text?: string;
   output?: OpenAiOutputItem[];
   error?: {
     message?: string;
   };
 };
+
+type OpenAiDiagnostics = {
+  id: string | null;
+  status: string | null;
+  httpStatus: number;
+  outputItemTypes: string[];
+  contentItemTypes: string[];
+  outputTextExists: boolean;
+};
+
+function getDiagnostics(body: OpenAiResponseBody, httpStatus: number): OpenAiDiagnostics {
+  return {
+    id: body.id ?? null,
+    status: body.status ?? null,
+    httpStatus,
+    outputItemTypes:
+      body.output?.map((item) => item.type ?? "unknown") ?? [],
+    contentItemTypes:
+      body.output?.flatMap((item) =>
+        item.content?.map((content) => content.type ?? "unknown") ?? [],
+      ) ?? [],
+    outputTextExists: typeof body.output_text === "string",
+  };
+}
 
 function extractOutputText(body: OpenAiResponseBody) {
   if (typeof body.output_text === "string" && body.output_text.trim()) {
@@ -28,7 +54,7 @@ function extractOutputText(body: OpenAiResponseBody) {
   return (
     body.output
       ?.flatMap((item) => item.content ?? [])
-      .filter((content) => content.type === "output_text" && content.text)
+      .filter((content) => typeof content.text === "string" && content.text.trim())
       .map((content) => content.text)
       .join("\n")
       .trim() ?? ""
@@ -66,6 +92,7 @@ export async function generateWeeklyReportInsight(metrics: unknown) {
   });
 
   const body = (await response.json().catch(() => ({}))) as OpenAiResponseBody;
+  const diagnostics = getDiagnostics(body, response.status);
 
   if (!response.ok) {
     throw new Error(
@@ -73,10 +100,14 @@ export async function generateWeeklyReportInsight(metrics: unknown) {
     );
   }
 
+  console.info("[weekly-ai] OpenAI response diagnostics.", diagnostics);
+
   const text = extractOutputText(body);
 
   if (!text) {
-    throw new Error("OpenAI returned an empty weekly report.");
+    throw new Error(
+      `OpenAI returned an empty weekly report. Diagnostics: ${JSON.stringify(diagnostics)}`,
+    );
   }
 
   return {
