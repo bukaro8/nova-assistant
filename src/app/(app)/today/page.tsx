@@ -34,14 +34,11 @@ import {
 } from "@/server/dashboard/date-utils";
 import { requireCurrentUser } from "@/server/dashboard/user";
 import { prisma } from "@/server/db/prisma";
+import { getExpenseCategoryLabel } from "@/server/expenses/categorise-expense";
 
 export const dynamic = "force-dynamic";
 
 const categories = Object.values(ExpenseCategory);
-
-function categoryLabel(category: string) {
-  return category.charAt(0) + category.slice(1).toLowerCase();
-}
 
 function getCurrentUkMinutes() {
   const parts = new Intl.DateTimeFormat("en-GB", {
@@ -392,11 +389,12 @@ export default async function TodayPage() {
                 <select
                   className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                   name="category"
-                  defaultValue={ExpenseCategory.OTHER}
+                  defaultValue=""
                 >
+                  <option value="">Auto categorise</option>
                   {categories.map((category) => (
                     <option key={category} value={category}>
-                      {categoryLabel(category)}
+                      {getExpenseCategoryLabel(category)}
                     </option>
                   ))}
                 </select>

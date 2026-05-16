@@ -15,6 +15,10 @@ import {
   getUtcForUkDateInput,
 } from "@/server/dashboard/date-utils";
 import { requireCurrentUser } from "@/server/dashboard/user";
+import {
+  categoriseExpenseForUser,
+  normaliseExpenseKeyword,
+} from "@/server/expenses/categorise-expense";
 import { sendTelegramMessage } from "@/server/telegram/api";
 import { createTelegramConnectionCode } from "@/server/telegram/linking";
 
@@ -99,6 +103,14 @@ function dashboardRedirectMessage({
 function expensesRedirectMessage(type: "success" | "error", message: string): never {
   const params = new URLSearchParams({ type, message });
   redirect(`/expenses?${params.toString()}`);
+}
+
+function expenseCategoriesRedirectMessage(
+  type: "success" | "error",
+  message: string,
+): never {
+  const params = new URLSearchParams({ type, message });
+  redirect(`/expenses/categories?${params.toString()}`);
 }
 
 function invalidForm(message = "Invalid form"): never {
@@ -548,34 +560,43 @@ export async function sendTelegramTestMessage() {
   redirect("/settings?type=success&message=Telegram test message sent");
 }
 
-function parseExpenseForm(formData: FormData) {
+async function parseExpenseForm(userId: string, formData: FormData) {
   const rawAmount = String(formData.get("amount") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim();
   const rawDate = String(formData.get("date") ?? "").trim();
   const amount = Number(rawAmount);
 
-  if (
-    !rawAmount ||
-    Number.isNaN(amount) ||
-    !description ||
-    !Object.values(ExpenseCategory).includes(category as ExpenseCategory)
-  ) {
+  if (!rawAmount || Number.isNaN(amount) || !description) {
     return null;
   }
+
+  const categorisation = Object.values(ExpenseCategory).includes(
+    category as ExpenseCategory,
+  )
+    ? {
+        category: category as ExpenseCategory,
+        confidence: 1,
+      }
+    : await categoriseExpenseForUser({
+        userId,
+        text: description,
+        amount: rawAmount,
+      });
 
   return {
     amount: rawAmount,
     description,
     rawText: description,
-    category: category as ExpenseCategory,
+    category: categorisation.category,
+    confidence: categorisation.confidence,
     expenseDate: rawDate ? getUtcForUkDateInput(rawDate) : new Date(),
   };
 }
 
 export async function createExpense(formData: FormData) {
   const user = await requireCurrentUser();
-  const parsed = parseExpenseForm(formData);
+  const parsed = await parseExpenseForm(user.id, formData);
 
   if (!parsed) {
     expensesRedirectMessage("error", "Invalid expense");
@@ -598,7 +619,7 @@ export async function createExpense(formData: FormData) {
 
 export async function createTodayExpense(formData: FormData) {
   const user = await requireCurrentUser();
-  const parsed = parseExpenseForm(formData);
+  const parsed = await parseExpenseForm(user.id, formData);
 
   if (!parsed) {
     dashboardRedirectMessage({
@@ -629,7 +650,7 @@ export async function createTodayExpense(formData: FormData) {
 
 export async function updateExpense(expenseId: string, formData: FormData) {
   const user = await requireCurrentUser();
-  const parsed = parseExpenseForm(formData);
+  const parsed = await parseExpenseForm(user.id, formData);
 
   if (!parsed) {
     expensesRedirectMessage("error", "Invalid expense");
@@ -663,6 +684,102 @@ export async function deleteExpense(expenseId: string) {
   revalidatePath("/expenses");
   revalidatePath("/today");
   expensesRedirectMessage("success", "Expense deleted");
+}
+
+function parseExpenseCategoryRuleForm(formData: FormData) {
+  const category = String(formData.get("category") ?? "").trim();
+  const keyword = normaliseExpenseKeyword(String(formData.get("keyword") ?? ""));
+
+  if (
+    !Object.values(ExpenseCategory).includes(category as ExpenseCategory) ||
+    !keyword ||
+    keyword.length > 80
+  ) {
+    return null;
+  }
+
+  return {
+    category: category as ExpenseCategory,
+    keyword,
+  };
+}
+
+export async function createExpenseCategoryRule(formData: FormData) {
+  const user = await requireCurrentUser();
+  const parsed = parseExpenseCategoryRuleForm(formData);
+
+  if (!parsed) {
+    expenseCategoriesRedirectMessage("error", "Invalid keyword");
+  }
+
+  try {
+    await prisma.expenseCategoryRule.create({
+      data: {
+        userId: user.id,
+        ...parsed,
+      },
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      expenseCategoriesRedirectMessage("error", "Keyword already exists");
+    }
+
+    throw error;
+  }
+
+  revalidatePath("/expenses");
+  revalidatePath("/expenses/categories");
+  revalidatePath("/reports/weekly");
+  expenseCategoriesRedirectMessage("success", "Keyword added");
+}
+
+export async function updateExpenseCategoryRule(
+  ruleId: string,
+  formData: FormData,
+) {
+  const user = await requireCurrentUser();
+  const parsed = parseExpenseCategoryRuleForm(formData);
+
+  if (!parsed) {
+    expenseCategoriesRedirectMessage("error", "Invalid keyword");
+  }
+
+  try {
+    await prisma.expenseCategoryRule.updateMany({
+      where: {
+        id: ruleId,
+        userId: user.id,
+      },
+      data: parsed,
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      expenseCategoriesRedirectMessage("error", "Keyword already exists");
+    }
+
+    throw error;
+  }
+
+  revalidatePath("/expenses");
+  revalidatePath("/expenses/categories");
+  revalidatePath("/reports/weekly");
+  expenseCategoriesRedirectMessage("success", "Keyword updated");
+}
+
+export async function deleteExpenseCategoryRule(ruleId: string) {
+  const user = await requireCurrentUser();
+
+  await prisma.expenseCategoryRule.deleteMany({
+    where: {
+      id: ruleId,
+      userId: user.id,
+    },
+  });
+
+  revalidatePath("/expenses");
+  revalidatePath("/expenses/categories");
+  revalidatePath("/reports/weekly");
+  expenseCategoriesRedirectMessage("success", "Keyword deleted");
 }
 
 export async function createHabit(formData: FormData) {

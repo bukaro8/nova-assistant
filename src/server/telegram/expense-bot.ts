@@ -3,6 +3,10 @@ import "dotenv/config";
 import { pathToFileURL } from "node:url";
 
 import { formatCurrency } from "@/lib/currency";
+import {
+  invalidTelegramExpenseMessage,
+  parseTelegramExpenseMessageForUser,
+} from "@/server/expenses/parse-telegram-expense";
 
 import { prisma } from "../db/prisma";
 import {
@@ -36,54 +40,6 @@ type TelegramUpdate = {
   message?: TelegramMessage;
 };
 
-type ExpenseCategory =
-  | "GROCERIES"
-  | "FOOD"
-  | "TRANSPORT"
-  | "BILLS"
-  | "SANDS"
-  | "INCOME"
-  | "SHOPPING"
-  | "OTHER";
-
-type ParsedExpense = {
-  amount: string;
-  description: string;
-  rawText: string;
-  expenseDate: Date;
-  category: ExpenseCategory;
-};
-
-const UK_TIME_ZONE = "Europe/London";
-const amountPattern = /^-?\d+(?:\.\d{1,2})?$/;
-const datePattern = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-
-const categoryRules: Array<{
-  category: Exclude<ExpenseCategory, "INCOME" | "OTHER">;
-  keywords: string[];
-}> = [
-  {
-    category: "GROCERIES",
-    keywords: ["aldi", "tesco", "sainsbury", "lidl", "asda", "morrisons"],
-  },
-  {
-    category: "FOOD",
-    keywords: ["coffee", "restaurant", "takeaway", "mcdonalds", "subway", "kfc"],
-  },
-  {
-    category: "TRANSPORT",
-    keywords: ["uber", "train", "bus", "petrol", "fuel"],
-  },
-  {
-    category: "SHOPPING",
-    keywords: ["amazon", "ebay", "paypal"],
-  },
-  {
-    category: "SANDS",
-    keywords: ["totalenergies"],
-  },
-];
-
 function debug(message: string, meta?: Record<string, unknown>) {
   if (meta) {
     console.log(`[telegram:expense] ${message}`, meta);
@@ -91,38 +47,6 @@ function debug(message: string, meta?: Record<string, unknown>) {
   }
 
   console.log(`[telegram:expense] ${message}`);
-}
-
-function getTodayUkDateParts() {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: UK_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-
-  const value = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value;
-
-  return {
-    day: Number(value("day")),
-    month: Number(value("month")),
-    year: Number(value("year")),
-  };
-}
-
-function dateFromParts(day: number, month: number, year: number) {
-  const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
-
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() !== month - 1 ||
-    date.getUTCDate() !== day
-  ) {
-    return null;
-  }
-
-  return date;
 }
 
 function formatExpenseDate(date: Date) {
@@ -136,81 +60,6 @@ function formatExpenseDate(date: Date) {
 
 function formatMoney(amount: string, currency: string | null | undefined) {
   return formatCurrency(Number(amount), currency);
-}
-
-function categorize(description: string, amount: string): ExpenseCategory {
-  if (Number(amount) < 0) {
-    return "INCOME";
-  }
-
-  const normalizedDescription = description.toLowerCase();
-
-  for (const rule of categoryRules) {
-    if (
-      rule.keywords.some((keyword) => normalizedDescription.includes(keyword))
-    ) {
-      return rule.category;
-    }
-  }
-
-  return "OTHER";
-}
-
-function parseOptionalDate(parts: string[]) {
-  const lastPart = parts.at(-1);
-
-  if (!lastPart) {
-    return {
-      descriptionParts: parts,
-      expenseDate: dateFromParts(
-        getTodayUkDateParts().day,
-        getTodayUkDateParts().month,
-        getTodayUkDateParts().year,
-      ),
-    };
-  }
-
-  const dateMatch = lastPart.match(datePattern);
-
-  if (!dateMatch) {
-    const today = getTodayUkDateParts();
-    return {
-      descriptionParts: parts,
-      expenseDate: dateFromParts(today.day, today.month, today.year),
-    };
-  }
-
-  const [, day, month, year] = dateMatch;
-
-  return {
-    descriptionParts: parts.slice(0, -1),
-    expenseDate: dateFromParts(Number(day), Number(month), Number(year)),
-  };
-}
-
-function parseExpenseMessage(text: string): ParsedExpense | null {
-  const rawText = text.trim();
-  const parts = rawText.split(/\s+/);
-  const amount = parts[0];
-
-  if (!amount || !amountPattern.test(amount)) {
-    return null;
-  }
-
-  const { descriptionParts, expenseDate } = parseOptionalDate(parts.slice(1));
-  const description = descriptionParts.join(" ").trim();
-
-  if (!description || !expenseDate) {
-    return null;
-  }
-
-  return {
-    amount,
-    description,
-    rawText,
-    expenseDate,
-    category: categorize(description, amount),
-  };
 }
 
 async function findLinkedUser(chatId: string) {
@@ -235,18 +84,13 @@ async function findLinkedUser(chatId: string) {
   return null;
 }
 
-function invalidFormatMessage() {
-  return [
-    "❌ Invalid format",
-    "",
-    "Try:",
-    "15.48 aldi",
-    "15.48 aldi 01/05/2026",
-  ].join("\n");
-}
-
 function savedExpenseMessage(
-  expense: ParsedExpense,
+  expense: {
+    amount: string;
+    description: string;
+    category: string;
+    expenseDate: Date;
+  },
   currency: string | null | undefined,
 ) {
   return [
@@ -358,36 +202,41 @@ async function handleExpenseMessage(message: TelegramMessage) {
     return;
   }
 
-  const parsedExpense = parseExpenseMessage(text);
+  const parsedExpense = await parseTelegramExpenseMessageForUser({
+    userId: user.id,
+    text,
+  });
 
   debug("Parse result.", {
     chatId,
-    parsed: parsedExpense
+    parsed: parsedExpense.ok
       ? {
-          amount: parsedExpense.amount,
-          description: parsedExpense.description,
-          category: parsedExpense.category,
-          expenseDate: parsedExpense.expenseDate,
-          rawText: parsedExpense.rawText,
+          amount: parsedExpense.expense.amount,
+          description: parsedExpense.expense.description,
+          category: parsedExpense.expense.category,
+          expenseDate: parsedExpense.expense.expenseDate,
+          rawText: parsedExpense.expense.rawText,
         }
       : null,
   });
 
-  if (!parsedExpense) {
-    await sendExpenseTelegramMessage(chatId, invalidFormatMessage());
+  if (!parsedExpense.ok) {
+    await sendExpenseTelegramMessage(chatId, invalidTelegramExpenseMessage());
     console.warn(`Invalid expense format from chat ${chatId}: "${text}"`);
     return;
   }
 
+  const expenseData = parsedExpense.expense;
   const expense = await prisma.expense.create({
     data: {
       userId: user.id,
-      amount: parsedExpense.amount,
-      description: parsedExpense.description,
-      category: parsedExpense.category,
+      amount: expenseData.amount,
+      description: expenseData.description,
+      category: expenseData.category,
+      confidence: expenseData.confidence,
       source: "telegram",
-      rawText: parsedExpense.rawText,
-      expenseDate: parsedExpense.expenseDate,
+      rawText: expenseData.rawText,
+      expenseDate: expenseData.expenseDate,
     },
   });
 
@@ -409,7 +258,7 @@ async function handleExpenseMessage(message: TelegramMessage) {
 
   const confirmation = await sendExpenseTelegramMessage(
     chatId,
-    savedExpenseMessage(parsedExpense, user.currency),
+    savedExpenseMessage(expenseData, user.currency),
   );
 
   debug("Telegram expense confirmation result.", {

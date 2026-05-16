@@ -23,6 +23,7 @@ model User {
   habits                Habit[]
   habitLogs             HabitLog[]
   expenses              Expense[]
+  expenseCategoryRules  ExpenseCategoryRule[]
   reminderLogs          ReminderLog[]
   weightLogs            WeightLog[]
   telegramConnectionCodes TelegramConnectionCode[]
@@ -134,6 +135,19 @@ model Expense {
   createdAt   DateTime         @default(now())
 
   @@index([userId, expenseDate])
+}
+
+model ExpenseCategoryRule {
+  id        String          @id @default(cuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  ExpenseCategory
+  keyword   String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([userId, category, keyword])
+  @@index([userId])
 }
 
 model WeightLog {

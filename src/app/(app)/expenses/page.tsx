@@ -28,6 +28,7 @@ import {
 } from "@/server/dashboard/date-utils";
 import { requireCurrentUser } from "@/server/dashboard/user";
 import { prisma } from "@/server/db/prisma";
+import { getExpenseCategoryLabel } from "@/server/expenses/categorise-expense";
 
 export const dynamic = "force-dynamic";
 
@@ -37,14 +38,6 @@ type SearchParams = Promise<{
 }>;
 
 const categories = Object.values(ExpenseCategory);
-
-function categoryLabel(category: string | null) {
-  if (!category) {
-    return "Uncategorised";
-  }
-
-  return category.charAt(0) + category.slice(1).toLowerCase();
-}
 
 function getFilter(value: string | undefined): ExpenseFilter {
   if (value === "month" || value === "all") {
@@ -79,7 +72,7 @@ function buildCategoryData(
       continue;
     }
 
-    const category = categoryLabel(expense.category);
+    const category = getExpenseCategoryLabel(expense.category);
     totals.set(category, (totals.get(category) ?? 0) + amount);
   }
 
@@ -128,12 +121,12 @@ function ExpenseForm({
           <select
             className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
             name="category"
-            required
-            defaultValue={expense?.category ?? ExpenseCategory.OTHER}
+            defaultValue={expense?.category ?? ""}
           >
+            <option value="">Auto categorise</option>
             {categories.map((category) => (
               <option key={category} value={category}>
-                {categoryLabel(category)}
+                {getExpenseCategoryLabel(category)}
               </option>
             ))}
           </select>
@@ -259,7 +252,23 @@ export default async function ExpensesPage({
       <HabitToast />
       <header className="space-y-1">
         <p className="text-sm text-muted-foreground">Spending reports</p>
-        <h1 className="text-2xl font-semibold tracking-tight">Expenses</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">Expenses</h1>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/reports/weekly"
+              className="flex h-10 items-center justify-center rounded-2xl border border-border bg-card px-4 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              Weekly report
+            </Link>
+            <Link
+              href="/expenses/categories"
+              className="flex h-10 items-center justify-center rounded-2xl border border-border bg-card px-4 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              Category keywords
+            </Link>
+          </div>
+        </div>
       </header>
 
       <section className="grid grid-cols-3 gap-2">
@@ -396,7 +405,7 @@ export default async function ExpensesPage({
                       {expense.description}
                     </CardTitle>
                     <CardDescription>
-                      {categoryLabel(expense.category)} ·{" "}
+                      {getExpenseCategoryLabel(expense.category)} ·{" "}
                       {formatUkDate(expense.expenseDate)}
                     </CardDescription>
                   </div>
