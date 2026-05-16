@@ -24,6 +24,28 @@ type UserWithAssistants = {
   timeZone?: string | null;
 };
 
+type ExpenseRecord = {
+  id: string;
+  amount: unknown;
+  description: string;
+  category: ExpenseCategory | null;
+  expenseDate: Date;
+};
+
+type HabitRecord = {
+  id: string;
+  scheduleDays: string[];
+};
+
+type HabitLogRecord = {
+  habitId: string;
+  loggedAt: Date;
+};
+
+type WeightLogRecord = {
+  weight: unknown;
+};
+
 export type WeeklyMetrics = {
   week: {
     start: string;
@@ -406,7 +428,7 @@ export async function buildWeeklyMetrics(user: UserWithAssistants, date = new Da
     dayCode: getZonedClock(new Date(`${day.key}T12:00:00.000Z`), timeZone).dayCode,
   }));
 
-  const [expenses, habits, habitLogs, weightLogs] = await Promise.all([
+  const [expenses, habits, habitLogs, weightLogs] = (await Promise.all([
     prisma.expense.findMany({
       where: {
         userId: user.id,
@@ -450,7 +472,7 @@ export async function buildWeeklyMetrics(user: UserWithAssistants, date = new Da
         createdAt: "asc",
       },
     }),
-  ]);
+  ])) as [ExpenseRecord[], HabitRecord[], HabitLogRecord[], WeightLogRecord[]];
 
   const positiveExpenses = expenses.filter((expense) => Number(expense.amount) > 0);
   const categoryTotals = new Map<ExpenseCategory | "UNCATEGORISED", number>();

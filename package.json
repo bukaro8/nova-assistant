@@ -6,7 +6,7 @@
     "dev": "next dev",
     "dev:all": "concurrently --names web,nova,scheduler --prefix-colors cyan,green,yellow \"npm run dev\" \"npm run telegram:nova\" \"npm run telegram:habit:scheduler\"",
     "build": "next build && npm run build:weekly-runner && npm run weekly-reports:check-artifact",
-    "build:weekly-runner": "tsc -p tsconfig.weekly-runner.json",
+    "build:weekly-runner": "node scripts/clean-weekly-runner.cjs && tsc -p tsconfig.weekly-runner.json && node scripts/prepare-weekly-runner.cjs",
     "start": "next start",
     "lint": "eslint",
     "test:expense-parser": "node --import tsx src/server/expenses/parse-telegram-expense.examples.ts",
@@ -29,8 +29,8 @@
     "telegram:nova:test": "node --env-file=.env --import tsx src/server/telegram/nova-bot.ts --test",
     "telegram:scheduler:prod": "node --import tsx src/server/telegram/habit-scheduler.ts",
     "weekly-reports:once": "node --env-file=.env --import tsx src/server/reports/weekly-ai-runner.ts",
-    "weekly-reports:once:prod": "node dist/weekly-runner/server/reports/weekly-ai-runner.js",
-    "weekly-reports:check-artifact": "node -e \"const fs=require('node:fs'); const path='dist/weekly-runner/server/reports/weekly-ai-runner.js'; if(!fs.existsSync(path)){console.error(path + ' is missing'); process.exit(1)} console.log(path + ' exists')\""
+    "weekly-reports:once:prod": "node dist/weekly-runner/server/reports/weekly-ai-runner.cjs",
+    "weekly-reports:check-artifact": "node -e \"const fs=require('node:fs'); const runner='dist/weekly-runner/server/reports/weekly-ai-runner.cjs'; const generated='dist/weekly-runner/generated'; if(!fs.existsSync(runner)){console.error(runner + ' is missing'); process.exit(1)} if(fs.existsSync(generated)){console.error(generated + ' should not exist'); process.exit(1)} require('node:child_process').execFileSync(process.execPath, [runner], {stdio:'inherit', env:{...process.env, WEEKLY_AI_RUNNER_CHECK_ONLY:'1', DATABASE_URL:process.env.DATABASE_URL || 'postgresql://nova:nova_password@localhost:5432/nova?schema=public'}}); console.log(runner + ' exists and loads')\""
   },
   "engines": {
     "node": ">=22.12.0"

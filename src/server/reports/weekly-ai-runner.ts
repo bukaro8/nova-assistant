@@ -1,10 +1,31 @@
 import "dotenv/config";
 
-import { prisma } from "../db/prisma";
-import { generateWeeklyAiReportsForDueUsers } from "./weekly-ai-report";
+type PrismaRuntime = {
+  $disconnect: () => Promise<void>;
+};
+
+let prisma: PrismaRuntime | null = null;
+
+async function loadRuntime() {
+  const [db, reports] = await Promise.all([
+    import("../db/prisma"),
+    import("./weekly-ai-report"),
+  ]);
+
+  prisma = db.prisma;
+
+  return reports;
+}
 
 async function runWeeklyReportsOnce() {
   const startedAt = Date.now();
+
+  const { generateWeeklyAiReportsForDueUsers } = await loadRuntime();
+
+  if (process.env.WEEKLY_AI_RUNNER_CHECK_ONLY === "1") {
+    console.log("[weekly-ai] Runner artifact loaded.");
+    return;
+  }
 
   console.log("[weekly-ai] Started.");
 
@@ -27,5 +48,5 @@ runWeeklyReportsOnce()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await prisma?.$disconnect();
   });

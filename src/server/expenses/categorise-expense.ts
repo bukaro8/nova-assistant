@@ -1,4 +1,13 @@
-import { ExpenseCategory } from "../../generated/prisma/enums";
+export const ExpenseCategory = {
+  GROCERIES: "GROCERIES",
+  FOOD: "FOOD",
+  TRANSPORT: "TRANSPORT",
+  BILLS: "BILLS",
+  SANDS: "SANDS",
+  INCOME: "INCOME",
+  SHOPPING: "SHOPPING",
+  OTHER: "OTHER",
+} as const;
 
 export type ExpenseCategoryValue =
   (typeof ExpenseCategory)[keyof typeof ExpenseCategory];
