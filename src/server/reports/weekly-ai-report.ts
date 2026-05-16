@@ -345,7 +345,8 @@ function buildSampleAiWeeklyMetrics({
         totalSpent: 184.35,
         spendByCategory: [
           { category: "GROCERIES", label: "Groceries", total: 76.4 },
-          { category: "FOOD", label: "Food", total: 44.2 },
+          { category: "TAKEAWAY", label: "Takeaway", total: 28 },
+          { category: "COFFEE_SNACKS", label: "Coffee Snacks", total: 16.2 },
           { category: "TRANSPORT", label: "Transport", total: 31.75 },
           { category: "SHOPPING", label: "Shopping", total: 32 },
         ],
@@ -376,8 +377,8 @@ function buildSampleAiWeeklyMetrics({
           {
             rank: 3,
             amount: 28,
-            category: "FOOD",
-            categoryLabel: "Food",
+            category: "TAKEAWAY",
+            categoryLabel: "Takeaway",
             date: "Saturday",
           },
         ],

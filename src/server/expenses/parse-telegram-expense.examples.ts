@@ -1,4 +1,4 @@
-import { ExpenseCategory } from "@/generated/prisma/enums";
+import { ExpenseCategory } from "./categorise-expense";
 import { parseTelegramExpenseMessage } from "./parse-telegram-expense";
 
 const examples = [
@@ -30,13 +30,13 @@ const examples = [
     text: "coffee 5",
     amount: "5",
     description: "coffee",
-    category: ExpenseCategory.FOOD,
+    category: ExpenseCategory.COFFEE_SNACKS,
   },
   {
     text: "5 coffee",
     amount: "5",
     description: "coffee",
-    category: ExpenseCategory.FOOD,
+    category: ExpenseCategory.COFFEE_SNACKS,
   },
   {
     text: "10.48 milk 01/05/2026",
@@ -69,6 +69,90 @@ const examples = [
     amount: "10",
     description: "milk and bread 2",
     category: ExpenseCategory.GROCERIES,
+  },
+  {
+    text: "1000 wages",
+    amount: "1000",
+    description: "wages",
+    category: ExpenseCategory.INCOME,
+  },
+  {
+    text: "10 child benefit",
+    amount: "10",
+    description: "child benefit",
+    category: ExpenseCategory.INCOME,
+  },
+  {
+    text: "250 refund",
+    amount: "250",
+    description: "refund",
+    category: ExpenseCategory.INCOME,
+  },
+  {
+    text: "40 barber",
+    amount: "40",
+    description: "barber",
+    category: ExpenseCategory.PERSONAL_CARE,
+  },
+  {
+    text: "8 beer",
+    amount: "8",
+    description: "beer",
+    category: ExpenseCategory.ENTERTAINMENT,
+  },
+  {
+    text: "20 pub",
+    amount: "20",
+    description: "pub",
+    category: ExpenseCategory.ENTERTAINMENT,
+  },
+  {
+    text: "15 parking",
+    amount: "15",
+    description: "parking",
+    category: ExpenseCategory.TRANSPORT,
+  },
+  {
+    text: "60 petrol",
+    amount: "60",
+    description: "petrol",
+    category: ExpenseCategory.TRANSPORT,
+  },
+  {
+    text: "5 coffee",
+    amount: "5",
+    description: "coffee",
+    category: ExpenseCategory.COFFEE_SNACKS,
+  },
+  {
+    text: "15 aldi",
+    amount: "15",
+    description: "aldi",
+    category: ExpenseCategory.GROCERIES,
+  },
+  {
+    text: "80 rent",
+    amount: "80",
+    description: "rent",
+    category: ExpenseCategory.HOUSING_BILLS,
+  },
+  {
+    text: "120 electricity",
+    amount: "120",
+    description: "electricity",
+    category: ExpenseCategory.HOUSING_BILLS,
+  },
+  {
+    text: "35 broadband",
+    amount: "35",
+    description: "broadband",
+    category: ExpenseCategory.HOUSING_BILLS,
+  },
+  {
+    text: "12 detergent",
+    amount: "12",
+    description: "detergent",
+    category: ExpenseCategory.HOUSEHOLD,
   },
 ];
 
