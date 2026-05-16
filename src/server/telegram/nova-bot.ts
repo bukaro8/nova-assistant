@@ -48,6 +48,10 @@ function normalizeReply(text: string) {
   return text.trim().toLowerCase();
 }
 
+function normalizeIncomingText(text: string) {
+  return text.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 function getLocalDayRange(date: Date) {
   const start = new Date(date);
   start.setHours(0, 0, 0, 0);
@@ -171,15 +175,12 @@ async function handleExpense({
   chatId: string;
   text: string;
   user: NonNullable<Awaited<ReturnType<typeof findLinkedUser>>>;
-}) {
-  if (!user.assistantExpenses) {
-    await sendTelegramMessage(
-      chatId,
-      "Expense tracking is disabled. Enable it in NOVA Settings.",
-    );
-    return;
-  }
-
+}): Promise<"saved" | "not-expense" | "rejected" | "disabled"> {
+  debug("Expense parser attempted.", {
+    chatId,
+    userId: user.id,
+    text,
+  });
   const parsedExpense = await parseTelegramExpenseMessageForUser({
     userId: user.id,
     text,
@@ -193,14 +194,34 @@ async function handleExpense({
           amount: parsedExpense.expense.amount,
           description: parsedExpense.expense.description,
           category: parsedExpense.expense.category,
+          confidence: parsedExpense.expense.confidence,
+          matchedKeyword: parsedExpense.expense.matchedKeyword,
           expenseDate: parsedExpense.expense.expenseDate,
         }
       : null,
+    ok: parsedExpense.ok,
+    rejectionReason: parsedExpense.ok ? null : parsedExpense.reason,
   });
 
   if (!parsedExpense.ok) {
+    if (parsedExpense.reason === "missing-amount") {
+      return "not-expense";
+    }
+
     await sendTelegramMessage(chatId, invalidTelegramExpenseMessage());
-    return;
+    return "rejected";
+  }
+
+  if (!user.assistantExpenses) {
+    debug("Expense parser succeeded but expense tracking is disabled.", {
+      chatId,
+      userId: user.id,
+    });
+    await sendTelegramMessage(
+      chatId,
+      "Expense tracking is disabled. Enable it in NOVA Settings.",
+    );
+    return "disabled";
   }
 
   const expenseData = parsedExpense.expense;
@@ -228,6 +249,8 @@ async function handleExpense({
     chatId,
     savedExpenseMessage(expenseData, user.currency),
   );
+
+  return "saved";
 }
 
 async function findMatchingHabit(userId: string, replyText: string) {
@@ -261,13 +284,15 @@ async function handleHabit({
   text,
   messageDate,
   user,
+  matchingHabits,
 }: {
   chatId: string;
   text: string;
   messageDate: number;
   user: NonNullable<Awaited<ReturnType<typeof findLinkedUser>>>;
+  matchingHabits?: Awaited<ReturnType<typeof findMatchingHabit>>;
 }) {
-  const matchingHabits = await findMatchingHabit(user.id, text);
+  matchingHabits ??= await findMatchingHabit(user.id, text);
 
   if (matchingHabits.length === 0) {
     await sendTelegramMessage(chatId, unknownMessage());
@@ -354,10 +379,13 @@ async function handleHabit({
 async function handleNovaMessage(message: TelegramMessage) {
   const chatId = String(message.chat.id);
   const text = message.text?.trim();
+  const normalizedText = text ? normalizeIncomingText(text) : "";
 
   debug("Incoming Telegram message.", {
     chatId,
-    text: message.text,
+    rawText: message.text,
+    text,
+    normalizedText,
     messageId: message.message_id,
     telegramDate: message.date,
   });
@@ -368,13 +396,27 @@ async function handleNovaMessage(message: TelegramMessage) {
   }
 
   const startCode = extractTelegramStartCode(text);
+  const startMatched = Boolean(startCode);
+
+  debug("Start command match result.", {
+    chatId,
+    matched: startMatched,
+    hasCode: startMatched,
+  });
 
   if (startCode) {
     await handleStartCode(chatId, startCode);
     return;
   }
 
-  if (/^\/help(?:@\w+)?$/i.test(text)) {
+  const helpMatched = /^\/help(?:@\w+)?$/i.test(text);
+
+  debug("Help command match result.", {
+    chatId,
+    matched: helpMatched,
+  });
+
+  if (helpMatched) {
     await sendTelegramMessage(chatId, helpMessage());
     return;
   }
@@ -390,18 +432,38 @@ async function handleNovaMessage(message: TelegramMessage) {
   }
 
   const matchingHabits = await findMatchingHabit(user.id, text);
+  const habitMatched = matchingHabits.length > 0;
 
-  if (matchingHabits.length > 0) {
+  debug("Priority decision after habit match.", {
+    chatId,
+    userId: user.id,
+    habitMatched,
+    habitMatchCount: matchingHabits.length,
+    expenseParserWillBeAttempted: !habitMatched,
+  });
+
+  if (habitMatched) {
     await handleHabit({
       chatId,
       text,
       messageDate: message.date,
       user,
+      matchingHabits,
     });
     return;
   }
 
-  await handleExpense({ chatId, text, user });
+  const expenseResult = await handleExpense({ chatId, text, user });
+
+  debug("Post-expense parser routing result.", {
+    chatId,
+    result: expenseResult,
+    fallbackUsed: expenseResult === "not-expense",
+  });
+
+  if (expenseResult === "not-expense") {
+    await sendTelegramMessage(chatId, unknownMessage());
+  }
 }
 
 export async function pollNovaReplies() {
