@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "dev:all": "concurrently --names web,nova,scheduler --prefix-colors cyan,green,yellow \"npm run dev\" \"npm run telegram:nova\" \"npm run telegram:habit:scheduler\"",
-    "build": "next build",
+    "build": "next build && npm run build:weekly-runner && npm run weekly-reports:check-artifact",
+    "build:weekly-runner": "tsc -p tsconfig.weekly-runner.json",
     "start": "next start",
     "lint": "eslint",
     "test:expense-parser": "node --import tsx src/server/expenses/parse-telegram-expense.examples.ts",
@@ -28,7 +29,8 @@
     "telegram:nova:test": "node --env-file=.env --import tsx src/server/telegram/nova-bot.ts --test",
     "telegram:scheduler:prod": "node --import tsx src/server/telegram/habit-scheduler.ts",
     "weekly-reports:once": "node --env-file=.env --import tsx src/server/reports/weekly-ai-runner.ts",
-    "weekly-reports:once:prod": "node --import tsx src/server/reports/weekly-ai-runner.ts"
+    "weekly-reports:once:prod": "node dist/weekly-runner/server/reports/weekly-ai-runner.js",
+    "weekly-reports:check-artifact": "node -e \"const fs=require('node:fs'); const path='dist/weekly-runner/server/reports/weekly-ai-runner.js'; if(!fs.existsSync(path)){console.error(path + ' is missing'); process.exit(1)} console.log(path + ' exists')\""
   },
   "engines": {
     "node": ">=22.12.0"

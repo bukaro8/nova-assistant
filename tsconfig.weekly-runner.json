@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "declaration": false,
+    "incremental": false,
+    "isolatedModules": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": "dist/weekly-runner",
+    "rootDir": "src",
+    "sourceMap": false,
+    "target": "ES2022"
+  },
+  "include": ["src/server/reports/weekly-ai-runner.ts"]
+}

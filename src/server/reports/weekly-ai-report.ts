@@ -1,8 +1,8 @@
-import type { ExpenseCategory, Prisma, WeeklyAiReport } from "@/generated/prisma/client";
+import type { ExpenseCategory, Prisma, WeeklyAiReport } from "../../generated/prisma/client";
 
-import { generateWeeklyReportInsight } from "@/server/ai/openai";
-import { prisma } from "@/server/db/prisma";
-import { getExpenseCategoryLabel } from "@/server/expenses/categorise-expense";
+import { generateWeeklyReportInsight } from "../ai/openai";
+import { prisma } from "../db/prisma";
+import { getExpenseCategoryLabel } from "../expenses/categorise-expense";
 
 export const DEFAULT_REPORT_TIME_ZONE = "Europe/London";
 export const MANUAL_REGENERATION_INTERVAL_MS = 6 * 60 * 60 * 1000;

@@ -1,4 +1,4 @@
-import { ExpenseCategory } from "@/generated/prisma/enums";
+import { ExpenseCategory } from "../../generated/prisma/enums";
 
 export type ExpenseCategoryValue =
   (typeof ExpenseCategory)[keyof typeof ExpenseCategory];
