@@ -2,7 +2,10 @@ import type { ExpenseCategory, Prisma, WeeklyAiReport } from "../../generated/pr
 
 import { generateWeeklyReportInsight } from "../ai/openai";
 import { prisma } from "../db/prisma";
-import { getExpenseCategoryLabel } from "../expenses/categorise-expense";
+import {
+  categoriseExpense,
+  getExpenseCategoryLabel,
+} from "../expenses/categorise-expense";
 
 export const DEFAULT_REPORT_TIME_ZONE = "Europe/London";
 export const MANUAL_REGENERATION_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -80,6 +83,7 @@ export type WeeklyMetrics = {
       amount: number;
       category: ExpenseCategory | null;
       categoryLabel: string;
+      insightLabel: string;
       date: string;
     }>;
   };
@@ -105,6 +109,7 @@ type AiWeeklyMetrics = Omit<WeeklyMetrics, "expenses"> & {
       amount: number;
       category: ExpenseCategory | null;
       categoryLabel: string;
+      insightLabel: string;
       date: string;
     }>;
   };
@@ -308,10 +313,45 @@ function toAiWeeklyMetrics(metrics: WeeklyMetrics): AiWeeklyMetrics {
         amount: expense.amount,
         category: expense.category,
         categoryLabel: expense.categoryLabel,
+        insightLabel: expense.insightLabel,
         date: expense.date,
       })),
     },
   };
+}
+
+function isReclassifiableCategory(category: ExpenseCategory | null) {
+  return !category || category === "OTHER";
+}
+
+function getReportCategory(expense: ExpenseRecord) {
+  if (!isReclassifiableCategory(expense.category)) {
+    return expense.category;
+  }
+
+  const categorisation = categoriseExpense({
+    text: expense.description,
+    amount: Number(expense.amount),
+  });
+
+  return categorisation.category === "OTHER"
+    ? expense.category
+    : (categorisation.category as ExpenseCategory);
+}
+
+function getSafeInsightLabel(expense: ExpenseRecord, category: ExpenseCategory | null) {
+  if (category !== "OTHER") {
+    return getExpenseCategoryLabel(category);
+  }
+
+  const categorisation = categoriseExpense({
+    text: expense.description,
+    amount: Number(expense.amount),
+  });
+
+  return categorisation.category === "OTHER"
+    ? getExpenseCategoryLabel(category)
+    : getExpenseCategoryLabel(categorisation.category);
 }
 
 function buildSampleAiWeeklyMetrics({
@@ -363,8 +403,9 @@ function buildSampleAiWeeklyMetrics({
           {
             rank: 1,
             amount: 42.3,
-            category: "GROCERIES",
-            categoryLabel: "Groceries",
+            category: "PERSONAL_CARE",
+            categoryLabel: "Personal Care",
+            insightLabel: "Personal Care",
             date: "Wednesday",
           },
           {
@@ -372,6 +413,7 @@ function buildSampleAiWeeklyMetrics({
             amount: 31.75,
             category: "TRANSPORT",
             categoryLabel: "Transport",
+            insightLabel: "Transport",
             date: "Friday",
           },
           {
@@ -379,6 +421,7 @@ function buildSampleAiWeeklyMetrics({
             amount: 28,
             category: "TAKEAWAY",
             categoryLabel: "Takeaway",
+            insightLabel: "Takeaway",
             date: "Saturday",
           },
         ],
@@ -477,10 +520,14 @@ export async function buildWeeklyMetrics(user: UserWithAssistants, date = new Da
 
   const positiveExpenses = expenses.filter((expense) => Number(expense.amount) > 0);
   const categoryTotals = new Map<ExpenseCategory | "UNCATEGORISED", number>();
+  const expensesForReport = positiveExpenses.map((expense) => ({
+    expense,
+    reportCategory: getReportCategory(expense),
+  }));
 
-  for (const expense of positiveExpenses) {
+  for (const { expense, reportCategory } of expensesForReport) {
     const amount = Number(expense.amount);
-    const category = expense.category ?? "UNCATEGORISED";
+    const category = reportCategory ?? "UNCATEGORISED";
     const key = getZonedClock(expense.expenseDate, timeZone).dateKey;
     const chartPoint = chartData.find((day) => day.key === key);
 
@@ -555,15 +602,16 @@ export async function buildWeeklyMetrics(user: UserWithAssistants, date = new Da
           }))
           .sort((a, b) => b.total - a.total),
         dailySpending: chartData,
-        topExpenses: positiveExpenses
-          .toSorted((a, b) => Number(b.amount) - Number(a.amount))
+        topExpenses: expensesForReport
+          .toSorted((a, b) => Number(b.expense.amount) - Number(a.expense.amount))
           .slice(0, 5)
-          .map((expense) => ({
+          .map(({ expense, reportCategory }) => ({
             id: expense.id,
             description: expense.description,
             amount: Number(expense.amount),
-            category: expense.category,
-            categoryLabel: getExpenseCategoryLabel(expense.category),
+            category: reportCategory,
+            categoryLabel: getExpenseCategoryLabel(reportCategory),
+            insightLabel: getSafeInsightLabel(expense, reportCategory),
             date: formatReportDate(expense.expenseDate, timeZone),
           })),
       },
@@ -743,9 +791,11 @@ function sleep(ms: number) {
 
 export async function generateWeeklyAiReportsForDueUsers({
   date = new Date(),
+  force = false,
   stagger = true,
 }: {
   date?: Date;
+  force?: boolean;
   stagger?: boolean;
 } = {}) {
   const users = await prisma.user.findMany({
@@ -777,6 +827,7 @@ export async function generateWeeklyAiReportsForDueUsers({
       const result = await generateWeeklyAiReportForUser({
         userId: user.id,
         date,
+        force,
       });
 
       results[result.status] += 1;

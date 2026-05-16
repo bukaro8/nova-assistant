@@ -29,7 +29,9 @@ async function runWeeklyReportsOnce() {
 
   console.log("[weekly-ai] Started.");
 
+  const force = process.argv.includes("--force-current-week");
   const result = await generateWeeklyAiReportsForDueUsers({
+    force,
     stagger: false,
   });
 
