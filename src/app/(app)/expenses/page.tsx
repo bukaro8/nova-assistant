@@ -262,6 +262,12 @@ export default async function ExpensesPage({
               Weekly report
             </Link>
             <Link
+              href="/expenses/recurring"
+              className="flex h-10 items-center justify-center rounded-2xl border border-border bg-card px-4 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              Recurring
+            </Link>
+            <Link
               href="/expenses/categories"
               className="flex h-10 items-center justify-center rounded-2xl border border-border bg-card px-4 text-sm font-medium transition-colors hover:bg-muted"
             >

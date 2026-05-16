@@ -203,12 +203,12 @@ export default async function WeeklyReportPage() {
           ) : (
             topExpenses.map((expense) => (
               <div
-                key={expense.id}
+                key={expense.rank}
                 className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-background/40 p-3"
               >
                 <div className="min-w-0">
                   <div className="truncate font-medium">
-                    {expense.description}
+                    {expense.insightLabel}
                   </div>
                   <div className="mt-1 text-sm text-muted-foreground">
                     {expense.categoryLabel} · {expense.date}

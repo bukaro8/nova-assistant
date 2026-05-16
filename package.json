@@ -10,6 +10,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:expense-parser": "node --import tsx src/server/expenses/parse-telegram-expense.examples.ts",
+    "test:recurring-payments": "node --import tsx src/server/expenses/recurring-payments.examples.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",

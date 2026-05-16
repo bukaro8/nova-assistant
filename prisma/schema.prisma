@@ -23,6 +23,7 @@ model User {
   habits                Habit[]
   habitLogs             HabitLog[]
   expenses              Expense[]
+  recurringPayments     RecurringPayment[]
   expenseCategoryRules  ExpenseCategoryRule[]
   reminderLogs          ReminderLog[]
   weightLogs            WeightLog[]
@@ -133,9 +134,33 @@ model Expense {
   source      String
   createdVia  String           @default("telegram")
   expenseDate DateTime
+  recurringPaymentId String?
+  recurringPayment   RecurringPayment? @relation(fields: [recurringPaymentId], references: [id], onDelete: SetNull)
+  recurringForMonth  String?
   createdAt   DateTime         @default(now())
 
   @@index([userId, expenseDate])
+  @@index([recurringPaymentId])
+  @@unique([recurringPaymentId, recurringForMonth])
+}
+
+model RecurringPayment {
+  id          String                    @id @default(cuid())
+  userId      String
+  user        User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  amount      Decimal                   @db.Decimal(10, 2)
+  category    ExpenseCategory
+  frequency   RecurringPaymentFrequency @default(MONTHLY)
+  dayOfMonth  Int
+  nextRunAt   DateTime
+  isActive    Boolean                   @default(true)
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  expenses    Expense[]
+
+  @@index([userId])
+  @@index([isActive, nextRunAt])
 }
 
 model ExpenseCategoryRule {
@@ -197,6 +222,7 @@ enum ExpenseCategory {
   PERSONAL_CARE
   ENTERTAINMENT
   SUBSCRIPTIONS
+  INSURANCE
   SHOPPING
   HOUSEHOLD
   HOUSING_BILLS
@@ -205,4 +231,8 @@ enum ExpenseCategory {
   WORK
   INCOME
   OTHER
+}
+
+enum RecurringPaymentFrequency {
+  MONTHLY
 }

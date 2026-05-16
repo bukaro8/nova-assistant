@@ -7,6 +7,7 @@ import {
   generateSampleWeeklyAiReportForDevelopment,
   generateWeeklyAiReportsForDueUsers,
 } from "../reports/weekly-ai-report";
+import { processDueRecurringPayments } from "../expenses/recurring-payments";
 import { requireHabitBotToken, sendTelegramMessage } from "./api";
 
 const UK_TIME_ZONE = "Europe/London";
@@ -441,8 +442,17 @@ async function processSampleWeeklyReport() {
   console.log(result.reportText);
 }
 
+async function processRecurringPayments() {
+  const result = await processDueRecurringPayments();
+
+  if (result.processed > 0 || result.failed > 0) {
+    console.log("[recurring-payments] Completed.", result);
+  }
+}
+
 async function processScheduledWork() {
   await processDueReminders();
+  await processRecurringPayments();
   await processDueWeeklyReports();
 }
 
@@ -504,6 +514,15 @@ if (isMainModule()) {
       });
   } else if (process.argv.includes("--weekly-reports-once")) {
     processDueWeeklyReports()
+      .catch((error) => {
+        console.error("[telegram:habit:scheduler] Caught error.", error);
+        process.exit(1);
+      })
+      .finally(async () => {
+        await prisma.$disconnect();
+      });
+  } else if (process.argv.includes("--recurring-payments-once")) {
+    processRecurringPayments()
       .catch((error) => {
         console.error("[telegram:habit:scheduler] Caught error.", error);
         process.exit(1);

@@ -14,6 +14,20 @@ export const WEEKLY_REPORT_FALLBACK =
 
 const DAY_MS = 86_400_000;
 const WEEK_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
+const BASELINE_SPENDING_CATEGORIES = [
+  "GROCERIES",
+  "HOUSING_BILLS",
+  "TRANSPORT",
+  "INSURANCE",
+] satisfies ExpenseCategory[];
+const BEHAVIOURAL_SPENDING_CATEGORIES = [
+  "TAKEAWAY",
+  "COFFEE_SNACKS",
+  "ENTERTAINMENT",
+  "SHOPPING",
+  "SUBSCRIPTIONS",
+  "PERSONAL_CARE",
+] satisfies ExpenseCategory[];
 
 type WeekDay = (typeof WEEK_DAYS)[number];
 
@@ -72,14 +86,31 @@ export type WeeklyMetrics = {
       label: string;
       total: number;
     }>;
+    spendingSignals: {
+      baselineTotal: number;
+      behaviouralTotal: number;
+      otherTotal: number;
+      baselineSharePercent: number;
+      behaviouralSharePercent: number;
+      mostlyEssentials: boolean;
+      grocerySpendUnusuallyHigh: boolean;
+      transportSpendUnusuallyHigh: boolean;
+      baselineCategories: string[];
+      behaviouralCategories: string[];
+      interpretationHint: string;
+      behaviouralSpendByCategory: Array<{
+        category: ExpenseCategory;
+        label: string;
+        total: number;
+      }>;
+    };
     dailySpending: Array<{
       key: string;
       label: string;
       total: number;
     }>;
     topExpenses: Array<{
-      id: string;
-      description: string;
+      rank: number;
       amount: number;
       category: ExpenseCategory | null;
       categoryLabel: string;
@@ -309,7 +340,7 @@ function toAiWeeklyMetrics(metrics: WeeklyMetrics): AiWeeklyMetrics {
     expenses: {
       ...metrics.expenses,
       topExpenses: metrics.expenses.topExpenses.map((expense, index) => ({
-        rank: index + 1,
+        rank: expense.rank ?? index + 1,
         amount: expense.amount,
         category: expense.category,
         categoryLabel: expense.categoryLabel,
@@ -340,8 +371,10 @@ function getReportCategory(expense: ExpenseRecord) {
 }
 
 function getSafeInsightLabel(expense: ExpenseRecord, category: ExpenseCategory | null) {
-  if (category !== "OTHER") {
-    return getExpenseCategoryLabel(category);
+  const categoryLabel = getExpenseCategoryLabel(category);
+
+  if (!category || !isBehaviouralCategory(category)) {
+    return categoryLabel;
   }
 
   const categorisation = categoriseExpense({
@@ -349,9 +382,75 @@ function getSafeInsightLabel(expense: ExpenseRecord, category: ExpenseCategory |
     amount: Number(expense.amount),
   });
 
-  return categorisation.category === "OTHER"
-    ? getExpenseCategoryLabel(category)
-    : getExpenseCategoryLabel(categorisation.category);
+  if (categorisation.category === category && categorisation.matchedKeyword) {
+    return getExpenseCategoryLabel(categorisation.matchedKeyword);
+  }
+
+  return categoryLabel;
+}
+
+function isBaselineCategory(category: ExpenseCategory | "UNCATEGORISED") {
+  return (BASELINE_SPENDING_CATEGORIES as readonly string[]).includes(category);
+}
+
+function isBehaviouralCategory(category: ExpenseCategory | "UNCATEGORISED") {
+  return (BEHAVIOURAL_SPENDING_CATEGORIES as readonly string[]).includes(category);
+}
+
+function sharePercent(total: number, grandTotal: number) {
+  if (grandTotal <= 0) {
+    return 0;
+  }
+
+  return Math.round((total / grandTotal) * 100);
+}
+
+function buildSpendingSignals(
+  categoryTotals: Map<ExpenseCategory | "UNCATEGORISED", number>,
+  totalSpent: number,
+) {
+  const baselineTotal = roundMoney(
+    Array.from(categoryTotals.entries())
+      .filter(([category]) => isBaselineCategory(category))
+      .reduce((total, [, amount]) => total + amount, 0),
+  );
+  const behaviouralSpendByCategory = Array.from(categoryTotals.entries())
+    .filter(([category]) => isBehaviouralCategory(category))
+    .map(([category, total]) => ({
+      category: category as ExpenseCategory,
+      label: getExpenseCategoryLabel(category),
+      total,
+    }))
+    .sort((a, b) => b.total - a.total);
+  const behaviouralTotal = roundMoney(
+    behaviouralSpendByCategory.reduce((total, category) => total + category.total, 0),
+  );
+  const otherTotal = roundMoney(Math.max(totalSpent - baselineTotal - behaviouralTotal, 0));
+  const baselineShare = sharePercent(baselineTotal, totalSpent);
+  const behaviouralShare = sharePercent(behaviouralTotal, totalSpent);
+  const groceryTotal = categoryTotals.get("GROCERIES") ?? 0;
+  const transportTotal = categoryTotals.get("TRANSPORT") ?? 0;
+  const grocerySpendUnusuallyHigh = groceryTotal >= 150 && sharePercent(groceryTotal, totalSpent) >= 60;
+  const transportSpendUnusuallyHigh =
+    transportTotal >= 100 && sharePercent(transportTotal, totalSpent) >= 35;
+  const mostlyEssentials = baselineShare >= 70 && behaviouralShare <= 20;
+
+  return {
+    baselineTotal,
+    behaviouralTotal,
+    otherTotal,
+    baselineSharePercent: baselineShare,
+    behaviouralSharePercent: behaviouralShare,
+    mostlyEssentials,
+    grocerySpendUnusuallyHigh,
+    transportSpendUnusuallyHigh,
+    baselineCategories: BASELINE_SPENDING_CATEGORIES.map(getExpenseCategoryLabel),
+    behaviouralCategories: BEHAVIOURAL_SPENDING_CATEGORIES.map(getExpenseCategoryLabel),
+    interpretationHint: mostlyEssentials
+      ? "Most spending this week is baseline essentials. Say there is little sign of discretionary overspending unless behavioural categories show a clear pattern."
+      : "Prioritise behavioural and discretionary categories over groceries, bills, and normal transport.",
+    behaviouralSpendByCategory,
+  };
 }
 
 function buildSampleAiWeeklyMetrics({
@@ -390,6 +489,32 @@ function buildSampleAiWeeklyMetrics({
           { category: "TRANSPORT", label: "Transport", total: 31.75 },
           { category: "SHOPPING", label: "Shopping", total: 32 },
         ],
+        spendingSignals: {
+          baselineTotal: 108.15,
+          behaviouralTotal: 76.2,
+          otherTotal: 0,
+          baselineSharePercent: 59,
+          behaviouralSharePercent: 41,
+          mostlyEssentials: false,
+          grocerySpendUnusuallyHigh: false,
+          transportSpendUnusuallyHigh: false,
+          baselineCategories: ["Groceries", "Housing Bills", "Transport"],
+          behaviouralCategories: [
+            "Takeaway",
+            "Coffee Snacks",
+            "Entertainment",
+            "Shopping",
+            "Subscriptions",
+            "Personal Care",
+          ],
+          interpretationHint:
+            "Prioritise behavioural and discretionary categories over groceries, bills, and normal transport.",
+          behaviouralSpendByCategory: [
+            { category: "SHOPPING", label: "Shopping", total: 32 },
+            { category: "TAKEAWAY", label: "Takeaway", total: 28 },
+            { category: "COFFEE_SNACKS", label: "Coffee Snacks", total: 16.2 },
+          ],
+        },
         dailySpending: [
           { key: week.mondayDateKey, label: "Mon", total: 18.5 },
           { key: "", label: "Tue", total: 0 },
@@ -405,7 +530,7 @@ function buildSampleAiWeeklyMetrics({
             amount: 42.3,
             category: "PERSONAL_CARE",
             categoryLabel: "Personal Care",
-            insightLabel: "Personal Care",
+            insightLabel: "Barber",
             date: "Wednesday",
           },
           {
@@ -601,13 +726,13 @@ export async function buildWeeklyMetrics(user: UserWithAssistants, date = new Da
             total,
           }))
           .sort((a, b) => b.total - a.total),
+        spendingSignals: buildSpendingSignals(categoryTotals, expenseTotal),
         dailySpending: chartData,
         topExpenses: expensesForReport
           .toSorted((a, b) => Number(b.expense.amount) - Number(a.expense.amount))
           .slice(0, 5)
-          .map(({ expense, reportCategory }) => ({
-            id: expense.id,
-            description: expense.description,
+          .map(({ expense, reportCategory }, index) => ({
+            rank: index + 1,
             amount: Number(expense.amount),
             category: reportCategory,
             categoryLabel: getExpenseCategoryLabel(reportCategory),
