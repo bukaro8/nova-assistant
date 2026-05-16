@@ -1,4 +1,5 @@
-export const WEEKLY_REPORT_MODEL = "gpt-5.4-mini";
+export const WEEKLY_REPORT_MODEL =
+  process.env.OPENAI_WEEKLY_MODEL ?? "gpt-5.4-mini";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 
