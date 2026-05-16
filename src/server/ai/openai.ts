@@ -1,4 +1,4 @@
-export const WEEKLY_REPORT_MODEL = "gpt-5-nano";
+export const WEEKLY_REPORT_MODEL = "gpt-5.4-mini";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 
@@ -31,16 +31,19 @@ type OpenAiDiagnostics = {
   outputTextExists: boolean;
 };
 
-function getDiagnostics(body: OpenAiResponseBody, httpStatus: number): OpenAiDiagnostics {
+function getDiagnostics(
+  body: OpenAiResponseBody,
+  httpStatus: number,
+): OpenAiDiagnostics {
   return {
     id: body.id ?? null,
     status: body.status ?? null,
     httpStatus,
-    outputItemTypes:
-      body.output?.map((item) => item.type ?? "unknown") ?? [],
+    outputItemTypes: body.output?.map((item) => item.type ?? "unknown") ?? [],
     contentItemTypes:
-      body.output?.flatMap((item) =>
-        item.content?.map((content) => content.type ?? "unknown") ?? [],
+      body.output?.flatMap(
+        (item) =>
+          item.content?.map((content) => content.type ?? "unknown") ?? [],
       ) ?? [],
     outputTextExists: typeof body.output_text === "string",
   };
@@ -54,7 +57,9 @@ function extractOutputText(body: OpenAiResponseBody) {
   return (
     body.output
       ?.flatMap((item) => item.content ?? [])
-      .filter((content) => typeof content.text === "string" && content.text.trim())
+      .filter(
+        (content) => typeof content.text === "string" && content.text.trim(),
+      )
       .map((content) => content.text)
       .join("\n")
       .trim() ?? ""
