@@ -27,6 +27,7 @@ model User {
   reminderLogs          ReminderLog[]
   weightLogs            WeightLog[]
   telegramConnectionCodes TelegramConnectionCode[]
+  weeklyAiReports       WeeklyAiReport[]
 }
 
 model EmailVerificationToken {
@@ -159,6 +160,22 @@ model WeightLog {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+model WeeklyAiReport {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weekStart     DateTime
+  weekEnd       DateTime
+  metricsJson   Json
+  reportText    String   @db.Text
+  model         String
+  createdAt     DateTime @default(now())
+  regeneratedAt DateTime?
+
+  @@unique([userId, weekStart])
+  @@index([userId])
 }
 
 enum HabitStatus {

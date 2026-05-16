@@ -35,7 +35,13 @@ type TelegramUpdate = {
   message?: TelegramMessage;
 };
 
+const TELEGRAM_DEBUG = process.env.NOVA_TELEGRAM_DEBUG === "true";
+
 function debug(message: string, meta?: Record<string, unknown>) {
+  if (!TELEGRAM_DEBUG) {
+    return;
+  }
+
   if (meta) {
     console.log(`[telegram:nova] ${message}`, meta);
     return;
@@ -147,7 +153,7 @@ async function handleStartCode(chatId: string, code: string) {
       chatId,
       "✅ NOVA Assistant connected. You can now log habits and expenses here.",
     );
-    console.log(`Linked NOVA Telegram chat ${chatId} to ${result.user.email}.`);
+    console.log("Linked NOVA Telegram chat.");
     return;
   }
 
@@ -156,7 +162,7 @@ async function handleStartCode(chatId: string, code: string) {
       chatId,
       "This Telegram account is already connected to another NOVA account.",
     );
-    console.warn(`NOVA Telegram chat ${chatId} is already linked elsewhere.`);
+    console.warn("NOVA Telegram chat is already linked elsewhere.");
     return;
   }
 
@@ -164,7 +170,7 @@ async function handleStartCode(chatId: string, code: string) {
     chatId,
     "❌ Invalid or expired NOVA connection. Open NOVA Settings and try again.",
   );
-  console.warn(`Invalid NOVA Telegram /start connection code from chat ${chatId}.`);
+  console.warn("Invalid NOVA Telegram /start connection code.");
 }
 
 async function handleExpense({

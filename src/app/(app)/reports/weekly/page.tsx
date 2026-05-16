@@ -1,8 +1,17 @@
 import Link from "next/link";
-import { ArrowLeft, BarChart3, Dumbbell, ReceiptText, Scale } from "lucide-react";
+import {
+  ArrowLeft,
+  BarChart3,
+  Dumbbell,
+  ReceiptText,
+  RefreshCw,
+  Scale,
+  Sparkles,
+} from "lucide-react";
 
 import { CategoryBreakdownChart } from "@/components/category-breakdown-chart";
 import { HabitToast } from "@/components/habit-manage-controls";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -13,149 +22,30 @@ import {
 import { WeeklySpendingChart } from "@/components/weekly-spending-chart";
 import { formatCurrency } from "@/lib/currency";
 import {
-  formatShortUkDate,
-  formatUkDate,
-  getCurrentUkWeekRange,
-  getUkClock,
-  getWeekChartDays,
-} from "@/server/dashboard/date-utils";
+  regenerateCurrentWeeklyAiReport,
+} from "@/server/reports/actions";
 import { requireCurrentUser } from "@/server/dashboard/user";
-import { prisma } from "@/server/db/prisma";
-import { getExpenseCategoryLabel } from "@/server/expenses/categorise-expense";
+import {
+  formatShortReportDate,
+  getCurrentWeeklyReportState,
+  WEEKLY_REPORT_FALLBACK,
+} from "@/server/reports/weekly-ai-report";
 
 export const dynamic = "force-dynamic";
 
-function totalSpend(
-  expenses: Array<{
-    amount: unknown;
-  }>,
-) {
-  return expenses
-    .filter((expense) => Number(expense.amount) > 0)
-    .reduce((total, expense) => total + Number(expense.amount), 0);
-}
-
-function buildCategoryData(
-  expenses: Array<{
-    amount: unknown;
-    category: string | null;
-  }>,
-) {
-  const totals = new Map<string, number>();
-
-  for (const expense of expenses) {
-    const amount = Number(expense.amount);
-
-    if (amount <= 0) {
-      continue;
-    }
-
-    const category = getExpenseCategoryLabel(expense.category);
-    totals.set(category, (totals.get(category) ?? 0) + amount);
-  }
-
-  return Array.from(totals.entries())
-    .map(([category, total]) => ({ category, total }))
-    .sort((a, b) => b.total - a.total);
-}
-
 export default async function WeeklyReportPage() {
   const user = await requireCurrentUser();
-  const week = getCurrentUkWeekRange();
-  const chartData = getWeekChartDays(week.start);
-  const weekDays = chartData.map((day) => ({
-    dateKey: day.key,
-    dayCode: getUkClock(new Date(`${day.key}T12:00:00.000Z`)).dayCode,
+  const { week, metrics, report } = await getCurrentWeeklyReportState(user.id);
+  const weekTotal = metrics.expenses.totalSpent;
+  const categoryData = metrics.expenses.spendByCategory.map((category) => ({
+    category: category.label,
+    total: category.total,
   }));
-
-  const [expenses, habits, habitLogs, weightLogs] = await Promise.all([
-    prisma.expense.findMany({
-      where: {
-        userId: user.id,
-        expenseDate: {
-          gte: week.start,
-          lt: week.end,
-        },
-      },
-      orderBy: {
-        expenseDate: "desc",
-      },
-    }),
-    prisma.habit.findMany({
-      where: {
-        userId: user.id,
-        active: true,
-      },
-      orderBy: {
-        reminderTime: "asc",
-      },
-    }),
-    prisma.habitLog.findMany({
-      where: {
-        userId: user.id,
-        status: "DONE",
-        loggedAt: {
-          gte: week.start,
-          lt: week.end,
-        },
-      },
-    }),
-    prisma.weightLog.findMany({
-      where: {
-        userId: user.id,
-        createdAt: {
-          gte: week.start,
-          lt: week.end,
-        },
-      },
-      orderBy: {
-        createdAt: "asc",
-      },
-    }),
-  ]);
-
-  const positiveExpenses = expenses.filter((expense) => Number(expense.amount) > 0);
-  const weekTotal = totalSpend(expenses);
-  const categoryData = buildCategoryData(expenses);
-  const topExpenses = positiveExpenses
-    .toSorted((a, b) => Number(b.amount) - Number(a.amount))
-    .slice(0, 5);
-  const completedHabitKeys = new Set(
-    habitLogs.map((log) => `${log.habitId}:${getUkClock(log.loggedAt).dateKey}`),
-  );
-  const scheduledHabitKeys = new Set<string>();
-
-  for (const habit of habits) {
-    for (const day of weekDays) {
-      if (habit.scheduleDays.includes(day.dayCode)) {
-        scheduledHabitKeys.add(`${habit.id}:${day.dateKey}`);
-      }
-    }
-  }
-
-  const habitCompletionTotal = scheduledHabitKeys.size;
-  const habitCompletionDone = Array.from(scheduledHabitKeys).filter((key) =>
-    completedHabitKeys.has(key),
-  ).length;
-  const habitCompletionPercent =
-    habitCompletionTotal === 0
-      ? 0
-      : Math.round((habitCompletionDone / habitCompletionTotal) * 100);
-  const firstWeight = weightLogs[0] ?? null;
-  const latestWeight = weightLogs.at(-1) ?? null;
-  const weightChange =
-    user.assistantWeight && firstWeight && latestWeight && weightLogs.length > 1
-      ? Number(latestWeight.weight) - Number(firstWeight.weight)
-      : null;
-
-  for (const expense of positiveExpenses) {
-    const key = getUkClock(expense.expenseDate).dateKey;
-    const point = chartData.find((day) => day.key === key);
-
-    if (point) {
-      point.total += Number(expense.amount);
-    }
-  }
+  const chartData = metrics.expenses.dailySpending;
+  const topExpenses = metrics.expenses.topExpenses;
+  const canGenerateReport =
+    metrics.hasEnabledAssistants && metrics.meaningfulActivity;
+  const aiReportText = report?.reportText ?? WEEKLY_REPORT_FALLBACK;
 
   return (
     <div className="space-y-5">
@@ -170,7 +60,8 @@ export default async function WeeklyReportPage() {
         </Link>
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">
-            {formatShortUkDate(week.start)} to {formatShortUkDate(new Date(week.end.getTime() - 1))}
+            {formatShortReportDate(week.start, week.timeZone)} to{" "}
+            {formatShortReportDate(new Date(week.end.getTime() - 1), week.timeZone)}
           </p>
           <h1 className="text-2xl font-semibold tracking-tight">
             Weekly report
@@ -210,11 +101,11 @@ export default async function WeeklyReportPage() {
               Habits
             </CardTitle>
             <CardDescription>
-              {habitCompletionDone}/{habitCompletionTotal} completed
+              {metrics.habits.completed}/{metrics.habits.scheduledCompletions} completed
             </CardDescription>
           </CardHeader>
           <CardContent className="text-3xl font-semibold">
-            {habitCompletionPercent}%
+            {metrics.habits.completionPercent}%
           </CardContent>
         </Card>
         {user.assistantWeight ? (
@@ -227,13 +118,50 @@ export default async function WeeklyReportPage() {
               <CardDescription>Current week change</CardDescription>
             </CardHeader>
             <CardContent className="text-3xl font-semibold">
-              {weightChange === null
+              {metrics.weight.changeKg === null
                 ? "No trend"
-                : `${weightChange > 0 ? "+" : ""}${weightChange.toFixed(1)} kg`}
+                : `${metrics.weight.changeKg > 0 ? "+" : ""}${metrics.weight.changeKg.toFixed(1)} kg`}
             </CardContent>
           </Card>
         ) : null}
       </section>
+
+      <Card>
+        <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1.5">
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="size-5 text-primary" />
+              AI insight report
+            </CardTitle>
+            <CardDescription>
+              {report
+                ? `Stored report generated with ${report.model}.`
+                : canGenerateReport
+                  ? "No stored AI report for this week yet."
+                  : "Skipped until there is assistant activity to report."}
+            </CardDescription>
+          </div>
+          {canGenerateReport ? (
+            <form action={regenerateCurrentWeeklyAiReport}>
+              <Button type="submit" variant="outline">
+                <RefreshCw className="size-4" />
+                Regenerate report
+              </Button>
+            </form>
+          ) : null}
+        </CardHeader>
+        <CardContent>
+          {canGenerateReport ? (
+            <div className="whitespace-pre-line text-sm leading-6 text-foreground">
+              {aiReportText}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
+              NOVA skips empty AI reports. Enable at least one assistant and log activity this week to generate one.
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <section className="grid gap-3 lg:grid-cols-2">
         <Card>
@@ -283,8 +211,7 @@ export default async function WeeklyReportPage() {
                     {expense.description}
                   </div>
                   <div className="mt-1 text-sm text-muted-foreground">
-                    {getExpenseCategoryLabel(expense.category)} ·{" "}
-                    {formatUkDate(expense.expenseDate)}
+                    {expense.categoryLabel} · {expense.date}
                   </div>
                 </div>
                 <div className="shrink-0 font-semibold">

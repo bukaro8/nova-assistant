@@ -3,10 +3,14 @@ import "dotenv/config";
 import { pathToFileURL } from "node:url";
 
 import { prisma } from "../db/prisma";
+import { generateWeeklyAiReportsForDueUsers } from "../reports/weekly-ai-report";
 import { requireHabitBotToken, sendTelegramMessage } from "./api";
 
 const UK_TIME_ZONE = "Europe/London";
 const MINUTE_MS = 60_000;
+const WEEKLY_REPORT_DAY = "MON";
+const WEEKLY_REPORT_TIME = "00:05";
+const TELEGRAM_DEBUG = process.env.NOVA_TELEGRAM_DEBUG === "true";
 
 type ReminderType = "initial" | "retry";
 
@@ -17,6 +21,10 @@ type UkClock = {
 };
 
 function debug(message: string, meta?: Record<string, unknown>) {
+  if (!TELEGRAM_DEBUG) {
+    return;
+  }
+
   if (meta) {
     console.log(`[telegram:habit:scheduler] ${message}`, meta);
     return;
@@ -134,6 +142,20 @@ function resolveClockForRun() {
     time: overrideTime ?? now.time,
     dayCode: overrideDay?.toUpperCase() ?? now.dayCode,
   };
+}
+
+function shouldRunWeeklyReports(clock: UkClock) {
+  if (process.argv.includes("--weekly-reports") || process.argv.includes("--weekly-reports-once")) {
+    return true;
+  }
+
+  return clock.dayCode === WEEKLY_REPORT_DAY && clock.time === WEEKLY_REPORT_TIME;
+}
+
+function getReportDateForScheduledRun(clock: UkClock) {
+  const runTime = getUtcForUkLocal(clock.dateKey, clock.time);
+
+  return new Date(runTime.getTime() - 10 * 60_000);
 }
 
 function getDueReminderType(
@@ -322,7 +344,6 @@ async function processDueReminders() {
         console.error("[telegram:habit:scheduler] Telegram sendMessage error.", {
           code: habit.code,
           reminderType,
-          chatId: user.telegramHabitChatId,
           error,
         });
         throw error;
@@ -345,11 +366,11 @@ async function processDueReminders() {
 
       if (reminderType === "retry") {
         console.log(
-          `Retry sent for ${habit.code} to ${user.email} at ${scheduledTime}.`,
+          `Retry sent for ${habit.code} at ${scheduledTime}.`,
         );
       } else {
         console.log(
-          `Reminder sent for ${habit.code} to ${user.email} at ${scheduledTime}.`,
+          `Reminder sent for ${habit.code} at ${scheduledTime}.`,
         );
       }
 
@@ -365,6 +386,46 @@ async function processDueReminders() {
   }
 }
 
+async function processDueWeeklyReports() {
+  const clock = resolveClockForRun();
+
+  if (!shouldRunWeeklyReports(clock)) {
+    debug("Skipping weekly AI reports; not scheduled for this minute.", {
+      dayCode: clock.dayCode,
+      time: clock.time,
+      scheduledDay: WEEKLY_REPORT_DAY,
+      scheduledTime: WEEKLY_REPORT_TIME,
+    });
+    return;
+  }
+
+  debug("Generating weekly AI reports.", {
+    dateKey: clock.dateKey,
+    dayCode: clock.dayCode,
+    time: clock.time,
+    forced:
+      process.argv.includes("--weekly-reports") ||
+      process.argv.includes("--weekly-reports-once"),
+  });
+
+  const results = await generateWeeklyAiReportsForDueUsers({
+    date:
+      process.argv.includes("--weekly-reports") ||
+      process.argv.includes("--weekly-reports-once")
+        ? new Date()
+        : getReportDateForScheduledRun(clock),
+  });
+
+  debug("Weekly AI report generation finished.", {
+    results,
+  });
+}
+
+async function processScheduledWork() {
+  await processDueReminders();
+  await processDueWeeklyReports();
+}
+
 function msUntilNextMinute() {
   const now = new Date();
   return MINUTE_MS - (now.getSeconds() * 1000 + now.getMilliseconds());
@@ -376,17 +437,18 @@ export async function startHabitScheduler() {
   debug("Scheduler started.", {
     timeZone: UK_TIME_ZONE,
     interval: "every minute",
+    weeklyReportSchedule: `${WEEKLY_REPORT_DAY} ${WEEKLY_REPORT_TIME}`,
   });
 
-  await processDueReminders();
+  await processScheduledWork();
 
   setTimeout(() => {
-    void processDueReminders().catch((error) => {
+    void processScheduledWork().catch((error) => {
       console.error("[telegram:habit:scheduler] Caught scheduler error.", error);
     });
 
     setInterval(() => {
-      void processDueReminders().catch((error) => {
+      void processScheduledWork().catch((error) => {
         console.error(
           "[telegram:habit:scheduler] Caught scheduler error.",
           error,
@@ -411,8 +473,17 @@ if (isMainModule()) {
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
 
-  if (process.argv.includes("--once")) {
-    processDueReminders()
+  if (process.argv.includes("--weekly-reports-once")) {
+    processDueWeeklyReports()
+      .catch((error) => {
+        console.error("[telegram:habit:scheduler] Caught error.", error);
+        process.exit(1);
+      })
+      .finally(async () => {
+        await prisma.$disconnect();
+      });
+  } else if (process.argv.includes("--once")) {
+    processScheduledWork()
       .catch((error) => {
         console.error("[telegram:habit:scheduler] Caught error.", error);
         process.exit(1);
