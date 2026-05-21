@@ -34,7 +34,9 @@ function parseRecurringPaymentForm(formData: FormData) {
     !Number.isInteger(dayOfMonth) ||
     dayOfMonth < 1 ||
     dayOfMonth > 31 ||
-    !Object.values(ExpenseCategory).includes(category as ExpenseCategory)
+    !Object.values(ExpenseCategory).includes(category as ExpenseCategory) ||
+    category === ExpenseCategory.INCOME ||
+    category === ExpenseCategory.TRANSFER
   ) {
     return null;
   }

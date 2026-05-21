@@ -5,6 +5,7 @@ import {
   type ExpenseCategoryRuleInput,
   type ExpenseCategoryValue,
 } from "@/server/expenses/categorise-expense";
+import type { AccountForSelection } from "@/server/accounts/accounts";
 
 type ParsedTelegramExpense = {
   amount: string;
@@ -18,10 +19,26 @@ type ParsedTelegramExpense = {
   accountName?: string | null;
 };
 
+type ParsedTelegramTransfer = {
+  amount: string;
+  rawText: string;
+  expenseDate: Date;
+  fromAccountId: string;
+  fromAccountName: string;
+  toAccountId: string;
+  toAccountName: string;
+};
+
 type ParseTelegramExpenseResult =
   | {
       ok: true;
+      type: "expense";
       expense: ParsedTelegramExpense;
+    }
+  | {
+      ok: true;
+      type: "transfer";
+      transfer: ParsedTelegramTransfer;
     }
   | {
       ok: false;
@@ -29,7 +46,10 @@ type ParseTelegramExpenseResult =
         | "missing-amount"
         | "missing-description"
         | "invalid-date"
-        | "unknown-account";
+        | "unknown-account"
+        | "missing-transfer-account"
+        | "same-transfer-account"
+        | "invalid-transfer-amount";
       accountAlias?: string;
     };
 
@@ -223,6 +243,122 @@ function unknownAccountAliasCandidate({
   return null;
 }
 
+function aliasWordMatch(words: string[], index: number, alias: string) {
+  const aliasWords = alias.split(" ").filter(Boolean);
+
+  if (aliasWords.length === 0) {
+    return false;
+  }
+
+  return aliasWords.every((word, offset) => words[index + offset] === word);
+}
+
+function matchTransferAccountAt({
+  words,
+  index,
+  accounts,
+}: {
+  words: string[];
+  index: number;
+  accounts: AccountForSelection[];
+}) {
+  const matches = accounts.flatMap((account) =>
+    account.aliases
+      .map((alias) => normaliseExpenseText(alias))
+      .filter(Boolean)
+      .filter((alias) => aliasWordMatch(words, index, alias))
+      .map((alias) => ({
+        account,
+        alias,
+        wordCount: alias.split(" ").filter(Boolean).length,
+      })),
+  );
+
+  return matches.toSorted((a, b) => {
+    const wordDiff = b.wordCount - a.wordCount;
+
+    if (wordDiff !== 0) {
+      return wordDiff;
+    }
+
+    return b.alias.length - a.alias.length;
+  })[0] ?? null;
+}
+
+function parseTransferAccounts({
+  description,
+  accounts,
+}: {
+  description: string;
+  accounts: AccountForSelection[];
+}) {
+  const normalised = normaliseExpenseText(description);
+  const words = normalised.split(" ").filter(Boolean);
+  const transferIndex = words.indexOf("transfer");
+
+  if (transferIndex === -1) {
+    return null;
+  }
+
+  const accountWords = words.slice(transferIndex + 1);
+
+  if (accountWords.length === 0) {
+    return {
+      ok: false as const,
+      reason: "missing-transfer-account" as const,
+    };
+  }
+
+  const fromMatch = matchTransferAccountAt({
+    words: accountWords,
+    index: 0,
+    accounts,
+  });
+
+  if (!fromMatch) {
+    return {
+      ok: false as const,
+      reason: "unknown-account" as const,
+      accountAlias: accountWords[0],
+    };
+  }
+
+  const toIndex = fromMatch.wordCount;
+  const toMatch = matchTransferAccountAt({
+    words: accountWords,
+    index: toIndex,
+    accounts,
+  });
+
+  if (!toMatch) {
+    if (!accountWords[toIndex]) {
+      return {
+        ok: false as const,
+        reason: "missing-transfer-account" as const,
+      };
+    }
+
+    return {
+      ok: false as const,
+      reason: "unknown-account" as const,
+      accountAlias: accountWords[toIndex],
+    };
+  }
+
+  if (fromMatch.account.id === toMatch.account.id) {
+    return {
+      ok: false as const,
+      reason: "same-transfer-account" as const,
+    };
+  }
+
+  return {
+    ok: true as const,
+    fromAccount: fromMatch.account,
+    toAccount: toMatch.account,
+  };
+}
+
 export function parseTelegramExpenseMessage({
   text,
   userRules = [],
@@ -266,6 +402,7 @@ export function parseTelegramExpenseMessage({
 
   return {
     ok: true,
+    type: "expense",
     expense: buildParsedExpense({
       rawText,
       amount: parsedAmount.amount,
@@ -329,6 +466,42 @@ export async function parseTelegramExpenseMessageForUser({
     }),
     accountHelpers.getActiveAccountsForUser(userId),
   ]);
+  const transferMatch = parseTransferAccounts({
+    description: descriptionWithPossibleAccount,
+    accounts,
+  });
+
+  if (transferMatch) {
+    if (!transferMatch.ok) {
+      return {
+        ok: false,
+        reason: transferMatch.reason,
+        accountAlias: "accountAlias" in transferMatch ? transferMatch.accountAlias : undefined,
+      };
+    }
+
+    if (Number(parsedAmount.amount) <= 0) {
+      return {
+        ok: false,
+        reason: "invalid-transfer-amount",
+      };
+    }
+
+    return {
+      ok: true,
+      type: "transfer",
+      transfer: {
+        amount: parsedAmount.amount,
+        rawText,
+        expenseDate: parsedDate.expenseDate,
+        fromAccountId: transferMatch.fromAccount.id,
+        fromAccountName: transferMatch.fromAccount.name,
+        toAccountId: transferMatch.toAccount.id,
+        toAccountName: transferMatch.toAccount.name,
+      },
+    };
+  }
+
   const accountMatch = accountHelpers.findAccountAliasInText({
     text: descriptionWithPossibleAccount,
     accounts,
@@ -375,6 +548,7 @@ export async function parseTelegramExpenseMessageForUser({
 
   return {
     ok: true,
+    type: "expense",
     expense: buildParsedExpense({
       rawText,
       amount: parsedAmount.amount,

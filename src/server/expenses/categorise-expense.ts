@@ -14,6 +14,7 @@ export const ExpenseCategory = {
   HEALTH: "HEALTH",
   WORK: "WORK",
   INCOME: "INCOME",
+  TRANSFER: "TRANSFER",
   OTHER: "OTHER",
 } as const;
 
@@ -48,6 +49,7 @@ const CATEGORY_ORDER: ExpenseCategoryValue[] = [
   ExpenseCategory.HEALTH,
   ExpenseCategory.WORK,
   ExpenseCategory.INCOME,
+  ExpenseCategory.TRANSFER,
   ExpenseCategory.OTHER,
 ];
 
@@ -278,6 +280,7 @@ export const builtInExpenseCategoryKeywords: Record<
     "universal credit",
     "wages",
   ],
+  TRANSFER: [],
   OTHER: [],
 };
 

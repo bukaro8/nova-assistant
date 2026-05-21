@@ -10,6 +10,7 @@ import {
   setDefaultAccount,
 } from "@/server/accounts/accounts";
 import { parseAccountAliases } from "@/lib/account-aliases";
+import { createAccountTransfer } from "@/server/accounts/transfers";
 import { requireCurrentUser } from "@/server/dashboard/user";
 import { prisma } from "@/server/db/prisma";
 
@@ -243,4 +244,60 @@ export async function setDefaultAccountAction(accountId: string) {
 
   revalidateAccountPaths();
   accountsRedirectMessage("success", "Default account updated");
+}
+
+export async function createTransfer(formData: FormData) {
+  const user = await requireCurrentUser();
+  const rawAmount = String(formData.get("amount") ?? "").trim();
+  const fromAccountId = String(formData.get("fromAccountId") ?? "").trim();
+  const toAccountId = String(formData.get("toAccountId") ?? "").trim();
+  const amount = Number(rawAmount);
+
+  if (
+    !rawAmount ||
+    Number.isNaN(amount) ||
+    amount <= 0 ||
+    !fromAccountId ||
+    !toAccountId
+  ) {
+    accountsRedirectMessage("error", "Invalid transfer");
+  }
+
+  if (fromAccountId === toAccountId) {
+    accountsRedirectMessage(
+      "error",
+      "Source and destination accounts must be different",
+    );
+  }
+
+  const accounts = await prisma.account.findMany({
+    where: {
+      userId: user.id,
+      id: {
+        in: [fromAccountId, toAccountId],
+      },
+      isActive: true,
+    },
+  });
+  const fromAccount = accounts.find((account) => account.id === fromAccountId);
+  const toAccount = accounts.find((account) => account.id === toAccountId);
+
+  if (!fromAccount || !toAccount) {
+    accountsRedirectMessage("error", "Transfer account not found");
+  }
+
+  await createAccountTransfer({
+    userId: user.id,
+    amount,
+    fromAccount,
+    toAccount,
+    rawText: `Transfer ${fromAccount.name} to ${toAccount.name}`,
+    source: "dashboard",
+    createdVia: "dashboard",
+  });
+
+  revalidateAccountPaths();
+  revalidatePath("/dashboard");
+  revalidatePath("/reports/weekly");
+  accountsRedirectMessage("success", "Transfer saved");
 }

@@ -327,6 +327,52 @@ export function findAccountAliasInText({
   return matches.toSorted((a, b) => b.alias.length - a.alias.length)[0] ?? null;
 }
 
+export function findAccountAliasMatchesInText({
+  text,
+  accounts,
+}: {
+  text: string;
+  accounts: AccountForSelection[];
+}) {
+  const normalisedText = normaliseAccountAlias(text);
+  const matches = accounts.flatMap((account) =>
+    account.aliases
+      .map((alias) => normaliseAccountAlias(alias))
+      .filter(Boolean)
+      .map((alias) => {
+        const pattern = new RegExp(
+          `(^|\\s)${alias
+            .split(" ")
+            .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+            .join("[\\s\\W_]+")}(?=\\s|$)`,
+          "i",
+        );
+        const match = normalisedText.match(pattern);
+
+        if (!match || match.index === undefined) {
+          return null;
+        }
+
+        return {
+          account,
+          alias,
+          index: match.index + (match[1]?.length ?? 0),
+        };
+      })
+      .filter((match) => match !== null),
+  );
+
+  return matches.toSorted((a, b) => {
+    const indexDiff = a.index - b.index;
+
+    if (indexDiff !== 0) {
+      return indexDiff;
+    }
+
+    return b.alias.length - a.alias.length;
+  });
+}
+
 export function removeAccountAliasFromText({
   text,
   alias,

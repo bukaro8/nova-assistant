@@ -14,6 +14,7 @@ import { AccountType } from "@/generated/prisma/enums";
 import { formatCurrency } from "@/lib/currency";
 import {
   createAccount,
+  createTransfer,
   deleteAccount,
   disableAccount,
   setDefaultAccountAction,
@@ -49,6 +50,7 @@ function AccountIcon({ type }: { type: string }) {
 export default async function AccountsPage() {
   const user = await requireCurrentUser();
   const accounts = await getAccountsWithBalances(user.id);
+  const activeAccounts = accounts.filter((account) => account.isActive);
 
   return (
     <div className="space-y-5">
@@ -84,6 +86,68 @@ export default async function AccountsPage() {
             defaultType={AccountType.CASH}
             submitLabel="Create account"
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Quick transfer</CardTitle>
+          <CardDescription>
+            Move money between accounts without changing spending totals.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={createTransfer} className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="text-sm font-medium">
+                Amount
+                <input
+                  className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  min="0.01"
+                  name="amount"
+                  placeholder="50.00"
+                  required
+                  step="0.01"
+                  type="number"
+                />
+              </label>
+              <label className="text-sm font-medium">
+                From
+                <select
+                  className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  name="fromAccountId"
+                  required
+                >
+                  {activeAccounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm font-medium">
+                To
+                <select
+                  className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  name="toAccountId"
+                  required
+                >
+                  {activeAccounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <Button
+              className="h-11 w-full rounded-2xl"
+              disabled={activeAccounts.length < 2}
+              type="submit"
+            >
+              Save transfer
+            </Button>
+          </form>
         </CardContent>
       </Card>
 

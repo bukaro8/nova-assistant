@@ -27,7 +27,9 @@ import {
 export const dynamic = "force-dynamic";
 
 const categories = Object.values(ExpenseCategory).filter(
-  (category) => category !== ExpenseCategory.INCOME,
+  (category) =>
+    category !== ExpenseCategory.INCOME &&
+    category !== ExpenseCategory.TRANSFER,
 );
 
 function RecurringPaymentForm({

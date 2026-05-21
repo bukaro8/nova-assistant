@@ -644,7 +644,10 @@ export async function buildWeeklyMetrics(user: UserWithAssistants, date = new Da
   ])) as [ExpenseRecord[], HabitRecord[], HabitLogRecord[], WeightLogRecord[]];
 
   const positiveExpenses = expenses.filter(
-    (expense) => Number(expense.amount) > 0 && expense.category !== "INCOME",
+    (expense) =>
+      Number(expense.amount) > 0 &&
+      expense.category !== "INCOME" &&
+      expense.category !== "TRANSFER",
   );
   const categoryTotals = new Map<ExpenseCategory | "UNCATEGORISED", number>();
   const expensesForReport = positiveExpenses.map((expense) => ({

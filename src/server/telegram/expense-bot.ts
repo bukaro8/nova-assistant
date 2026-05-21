@@ -7,6 +7,7 @@ import {
   invalidTelegramExpenseMessage,
   parseTelegramExpenseMessageForUser,
 } from "@/server/expenses/parse-telegram-expense";
+import { createAccountTransfer } from "@/server/accounts/transfers";
 
 import { prisma } from "../db/prisma";
 import {
@@ -102,6 +103,23 @@ function savedExpenseMessage(
     `Category: ${expense.category}`,
     `Account: ${expense.accountName ?? "Default account"}`,
     `Date: ${formatExpenseDate(expense.expenseDate)}`,
+  ].join("\n");
+}
+
+function savedTransferMessage(
+  transfer: {
+    amount: string;
+    fromAccountName: string;
+    toAccountName: string;
+  },
+  currency: string | null | undefined,
+) {
+  return [
+    "✅ Transfer saved",
+    "",
+    `Amount: ${formatMoney(transfer.amount, currency)}`,
+    `From: ${transfer.fromAccountName}`,
+    `To: ${transfer.toAccountName}`,
   ].join("\n");
 }
 
@@ -212,17 +230,50 @@ async function handleExpenseMessage(message: TelegramMessage) {
   debug("Parse result.", {
     chatId,
     parsed: parsedExpense.ok
-      ? {
-          amount: parsedExpense.expense.amount,
-          description: parsedExpense.expense.description,
-          category: parsedExpense.expense.category,
-          expenseDate: parsedExpense.expense.expenseDate,
-          rawText: parsedExpense.expense.rawText,
-        }
+      ? parsedExpense.type === "expense"
+        ? {
+            type: parsedExpense.type,
+            amount: parsedExpense.expense.amount,
+            description: parsedExpense.expense.description,
+            category: parsedExpense.expense.category,
+            expenseDate: parsedExpense.expense.expenseDate,
+            rawText: parsedExpense.expense.rawText,
+          }
+        : {
+            type: parsedExpense.type,
+            amount: parsedExpense.transfer.amount,
+            from: parsedExpense.transfer.fromAccountName,
+            to: parsedExpense.transfer.toAccountName,
+            expenseDate: parsedExpense.transfer.expenseDate,
+          }
       : null,
   });
 
   if (!parsedExpense.ok) {
+    if (parsedExpense.reason === "missing-transfer-account") {
+      await sendExpenseTelegramMessage(
+        chatId,
+        "Please specify both accounts. Example: 50 transfer barclays pulse",
+      );
+      return;
+    }
+
+    if (parsedExpense.reason === "same-transfer-account") {
+      await sendExpenseTelegramMessage(
+        chatId,
+        "Source and destination accounts must be different.",
+      );
+      return;
+    }
+
+    if (parsedExpense.reason === "invalid-transfer-amount") {
+      await sendExpenseTelegramMessage(
+        chatId,
+        "Transfer amount must be positive.",
+      );
+      return;
+    }
+
     if (parsedExpense.reason === "unknown-account") {
       await sendExpenseTelegramMessage(
         chatId,
@@ -233,6 +284,33 @@ async function handleExpenseMessage(message: TelegramMessage) {
 
     await sendExpenseTelegramMessage(chatId, invalidTelegramExpenseMessage());
     console.warn(`Invalid expense format from chat ${chatId}: "${text}"`);
+    return;
+  }
+
+  if (parsedExpense.type === "transfer") {
+    const transferData = parsedExpense.transfer;
+
+    await createAccountTransfer({
+      userId: user.id,
+      amount: transferData.amount,
+      fromAccount: {
+        id: transferData.fromAccountId,
+        name: transferData.fromAccountName,
+      },
+      toAccount: {
+        id: transferData.toAccountId,
+        name: transferData.toAccountName,
+      },
+      rawText: transferData.rawText,
+      source: "telegram",
+      createdVia: "telegram",
+      expenseDate: transferData.expenseDate,
+    });
+
+    await sendExpenseTelegramMessage(
+      chatId,
+      savedTransferMessage(transferData, user.currency),
+    );
     return;
   }
 

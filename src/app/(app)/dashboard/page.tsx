@@ -62,7 +62,11 @@ function isSpendingExpense(expense: {
   amount: unknown;
   category: string | null;
 }) {
-  return Number(expense.amount) > 0 && expense.category !== ExpenseCategory.INCOME;
+  return (
+    Number(expense.amount) > 0 &&
+    expense.category !== ExpenseCategory.INCOME &&
+    expense.category !== ExpenseCategory.TRANSFER
+  );
 }
 
 function incomeAmount(expense: {
@@ -71,7 +75,11 @@ function incomeAmount(expense: {
 }) {
   const amount = Number(expense.amount);
 
-  if (expense.category === ExpenseCategory.INCOME || amount < 0) {
+  if (expense.category === ExpenseCategory.INCOME) {
+    return Math.abs(amount);
+  }
+
+  if (amount < 0 && expense.category !== ExpenseCategory.TRANSFER) {
     return Math.abs(amount);
   }
 

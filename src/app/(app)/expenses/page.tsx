@@ -77,7 +77,7 @@ function totalIncome(
       return total + Math.abs(amount);
     }
 
-    if (amount < 0) {
+    if (amount < 0 && expense.category !== ExpenseCategory.TRANSFER) {
       return total + Math.abs(amount);
     }
 
@@ -89,7 +89,11 @@ function isSpendingExpense(expense: {
   amount: unknown;
   category: string | null;
 }) {
-  return Number(expense.amount) > 0 && expense.category !== ExpenseCategory.INCOME;
+  return (
+    Number(expense.amount) > 0 &&
+    expense.category !== ExpenseCategory.INCOME &&
+    expense.category !== ExpenseCategory.TRANSFER
+  );
 }
 
 function buildCategoryData(

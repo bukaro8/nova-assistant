@@ -168,7 +168,7 @@ function formatDate(date: Date) {
 for (const example of examples) {
   const result = parseTelegramExpenseMessage({ text: example.text });
 
-  if (!result.ok) {
+  if (!result.ok || result.type !== "expense") {
     throw new Error(`${example.text}: expected parse success`);
   }
 
