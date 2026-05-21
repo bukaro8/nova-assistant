@@ -8,6 +8,7 @@ import {
   parseTelegramExpenseMessageForUser,
 } from "@/server/expenses/parse-telegram-expense";
 import { createAccountTransfer } from "@/server/accounts/transfers";
+import { findHabitReplyMatches } from "@/server/telegram/habit-matching";
 
 import { prisma } from "../db/prisma";
 import {
@@ -61,8 +62,13 @@ function normalizeIncomingText(text: string) {
 
 function isTransferCandidate(normalizedText: string) {
   const words = normalizedText.split(" ").filter(Boolean);
+  const startsWithMoveOrPay =
+    Boolean(words[0]) &&
+    ["move", "moved", "pay", "paid"].includes(words[0]) &&
+    words.includes("from") &&
+    (words.includes("to") || words.includes("into"));
 
-  return normalizedText.includes(" transfer ") || words[1] === "transfer";
+  return words.includes("transfer") || startsWithMoveOrPay;
 }
 
 function getLocalDayRange(date: Date) {
@@ -103,7 +109,7 @@ function helpMessage() {
     "",
     "🔁 Transfers",
     "50 transfer barclays paypal",
-    "100 transfer cash barclays",
+    "50 transfer barclays to paypal",
     "",
     "🏦 Accounts",
     "Use aliases like:",
@@ -498,11 +504,7 @@ async function findMatchingHabit(userId: string, replyText: string) {
     },
   });
 
-  const matchingHabits = habits.filter((candidate) =>
-    candidate.validReplies.some(
-      (validReply) => normalizeReply(validReply) === normalizedReply,
-    ),
-  );
+  const matchingHabits = findHabitReplyMatches(habits, replyText);
 
   debug("Habit match result.", {
     userId,
@@ -546,7 +548,7 @@ async function handleHabit({
   if (matchingHabits.length > 1) {
     await sendTelegramMessage(
       chatId,
-      "That reply matches more than one habit. Update your habit replies in NOVA Settings.",
+      "I’m not sure which habit you meant. Try the habit code shown in NOVA.",
     );
     return;
   }

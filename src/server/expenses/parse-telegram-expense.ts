@@ -56,6 +56,17 @@ type ParseTelegramExpenseResult =
 const UK_TIME_ZONE = "Europe/London";
 const datePattern = /\b(\d{2})\/(\d{2})\/(\d{4})\b/;
 const amountPattern = /(^|[^a-z0-9/.])(-?\d+(?:\.\d{1,2})?)(?![a-z0-9/.])/;
+const transferCommandWords = new Set(["move", "moved", "pay", "paid"]);
+const transferFillerWords = new Set([
+  "from",
+  "into",
+  "move",
+  "moved",
+  "paid",
+  "pay",
+  "to",
+  "transfer",
+]);
 const commonAccountAliasHints = new Set([
   "amex",
   "bank",
@@ -294,13 +305,18 @@ function parseTransferAccounts({
 }) {
   const normalised = normaliseExpenseText(description);
   const words = normalised.split(" ").filter(Boolean);
-  const transferIndex = words.indexOf("transfer");
+  const hasTransferKeyword = words.includes("transfer");
+  const hasMoveOrPayCommand =
+    Boolean(words[0]) &&
+    transferCommandWords.has(words[0]) &&
+    words.includes("from") &&
+    (words.includes("to") || words.includes("into"));
 
-  if (transferIndex === -1) {
+  if (!hasTransferKeyword && !hasMoveOrPayCommand) {
     return null;
   }
 
-  const accountWords = words.slice(transferIndex + 1);
+  const accountWords = words.filter((word) => !transferFillerWords.has(word));
 
   if (accountWords.length === 0) {
     return {
@@ -360,9 +376,11 @@ function parseTransferAccounts({
 }
 
 export function parseTelegramExpenseMessage({
+  accounts = [],
   text,
   userRules = [],
 }: {
+  accounts?: AccountForSelection[];
   text: string;
   userRules?: ExpenseCategoryRuleInput[];
 }): ParseTelegramExpenseResult {
@@ -392,6 +410,45 @@ export function parseTelegramExpenseMessage({
       ok: false,
       reason: "missing-description",
     };
+  }
+
+  if (accounts.length > 0) {
+    const transferMatch = parseTransferAccounts({
+      description,
+      accounts,
+    });
+
+    if (transferMatch) {
+      if (!transferMatch.ok) {
+        return {
+          ok: false,
+          reason: transferMatch.reason,
+          accountAlias:
+            "accountAlias" in transferMatch ? transferMatch.accountAlias : undefined,
+        };
+      }
+
+      if (Number(parsedAmount.amount) <= 0) {
+        return {
+          ok: false,
+          reason: "invalid-transfer-amount",
+        };
+      }
+
+      return {
+        ok: true,
+        type: "transfer",
+        transfer: {
+          amount: parsedAmount.amount,
+          rawText,
+          expenseDate: parsedDate.expenseDate,
+          fromAccountId: transferMatch.fromAccount.id,
+          fromAccountName: transferMatch.fromAccount.name,
+          toAccountId: transferMatch.toAccount.id,
+          toAccountName: transferMatch.toAccount.name,
+        },
+      };
+    }
   }
 
   const categorisation = categoriseExpense({

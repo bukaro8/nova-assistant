@@ -1,6 +1,7 @@
 import { ExpenseCategory } from "./categorise-expense";
 import { parseTelegramExpenseMessage } from "./parse-telegram-expense";
 import { calculateAccountBalance } from "@/server/accounts/accounts";
+import { findHabitReplyMatches } from "@/server/telegram/habit-matching";
 
 const examples = [
   {
@@ -204,6 +205,97 @@ if (noAmount.ok || noAmount.reason !== "missing-amount") {
   throw new Error("milk: expected missing-amount failure");
 }
 
+const transferAccounts = [
+  {
+    id: "barclays",
+    name: "Barclays",
+    type: "BANK",
+    aliases: ["barclays"],
+    isDefault: true,
+    isActive: true,
+  },
+  {
+    id: "paypal",
+    name: "PayPal",
+    type: "CREDIT_CARD",
+    aliases: ["paypal"],
+    isDefault: false,
+    isActive: true,
+  },
+];
+const transferExamples = [
+  {
+    text: "50 transfer barclays to paypal",
+    amount: "50",
+    fromAccountId: "barclays",
+    toAccountId: "paypal",
+  },
+  {
+    text: "move 50 from barclays to paypal",
+    amount: "50",
+    fromAccountId: "barclays",
+    toAccountId: "paypal",
+  },
+];
+
+for (const example of transferExamples) {
+  const result = parseTelegramExpenseMessage({
+    accounts: transferAccounts,
+    text: example.text,
+  });
+
+  if (!result.ok || result.type !== "transfer") {
+    throw new Error(`${example.text}: expected transfer parse success`);
+  }
+
+  if (
+    result.transfer.amount !== example.amount ||
+    result.transfer.fromAccountId !== example.fromAccountId ||
+    result.transfer.toAccountId !== example.toAccountId
+  ) {
+    throw new Error(
+      `${example.text}: got ${JSON.stringify({
+        amount: result.transfer.amount,
+        fromAccountId: result.transfer.fromAccountId,
+        toAccountId: result.transfer.toAccountId,
+      })}`,
+    );
+  }
+}
+
+const habitExamples = [
+  {
+    text: "magne",
+    expectedCode: "magnesium",
+  },
+  {
+    text: "studdy",
+    expectedCode: "study",
+  },
+];
+const habits = [
+  {
+    code: "magnesium",
+    validReplies: ["magnesium"],
+  },
+  {
+    code: "study",
+    validReplies: ["study"],
+  },
+];
+
+for (const example of habitExamples) {
+  const matches = findHabitReplyMatches(habits, example.text);
+
+  if (matches.length !== 1 || matches[0]?.code !== example.expectedCode) {
+    throw new Error(
+      `${example.text}: expected ${example.expectedCode}, got ${matches
+        .map((habit) => habit.code)
+        .join(", ")}`,
+    );
+  }
+}
+
 const balanceExamples = [
   {
     name: "Barclays opening 0 + 179 wages",
@@ -245,5 +337,5 @@ for (const example of balanceExamples) {
 }
 
 console.log(
-  `Parsed ${examples.length} Telegram expense examples and ${balanceExamples.length} balance examples.`,
+  `Parsed ${examples.length} Telegram expense examples, ${transferExamples.length} transfer examples, ${habitExamples.length} habit examples and ${balanceExamples.length} balance examples.`,
 );
