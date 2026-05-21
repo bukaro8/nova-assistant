@@ -7,9 +7,9 @@ import { AccountType } from "@/generated/prisma/enums";
 import {
   assertAliasesAreUniqueForUser,
   ensureDefaultAccount,
-  parseAccountAliases,
   setDefaultAccount,
 } from "@/server/accounts/accounts";
+import { parseAccountAliases } from "@/lib/account-aliases";
 import { requireCurrentUser } from "@/server/dashboard/user";
 import { prisma } from "@/server/db/prisma";
 
@@ -61,7 +61,7 @@ function parseAccountForm(formData: FormData) {
   return {
     name,
     type,
-    aliases: parseAccountAliases(rawAliases),
+    aliases: parseAccountAliases(rawAliases, name),
     openingBalance: rawOpeningBalance || "0",
     dueDay,
   };

@@ -21,6 +21,7 @@ import {
 } from "@/server/accounts/actions";
 import { getAccountsWithBalances } from "@/server/accounts/accounts";
 import { requireCurrentUser } from "@/server/dashboard/user";
+import { AccountForm } from "./account-form";
 
 export const dynamic = "force-dynamic";
 
@@ -43,92 +44,6 @@ function AccountIcon({ type }: { type: string }) {
   }
 
   return <Wallet className="size-5 text-primary" />;
-}
-
-function AccountForm({
-  action,
-  submitLabel,
-  account,
-}: {
-  action: (formData: FormData) => void | Promise<void>;
-  submitLabel: string;
-  account?: {
-    name: string;
-    type: string;
-    aliases: string[];
-    openingBalance: unknown;
-    dueDay: number | null;
-  };
-}) {
-  return (
-    <form action={action} className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="text-sm font-medium">
-          Name
-          <input
-            className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-            defaultValue={account?.name}
-            maxLength={80}
-            name="name"
-            placeholder="Barclays"
-            required
-          />
-        </label>
-        <label className="text-sm font-medium">
-          Type
-          <select
-            className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-            defaultValue={account?.type ?? AccountType.CASH}
-            name="type"
-          >
-            {accountTypes.map((type) => (
-              <option key={type} value={type}>
-                {getAccountTypeLabel(type)}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="text-sm font-medium">
-          Opening balance
-          <input
-            className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-            defaultValue={
-              account ? Number(account.openingBalance).toFixed(2) : "0.00"
-            }
-            name="openingBalance"
-            step="0.01"
-            type="number"
-          />
-        </label>
-        <label className="text-sm font-medium">
-          Due day
-          <input
-            className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-            defaultValue={account?.dueDay ?? ""}
-            max={31}
-            min={1}
-            name="dueDay"
-            placeholder="Credit cards only"
-            type="number"
-          />
-        </label>
-      </div>
-      <label className="block text-sm font-medium">
-        Aliases
-        <textarea
-          className="mt-1 min-h-24 w-full rounded-2xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-          defaultValue={account?.aliases.join("\n")}
-          name="aliases"
-          placeholder={"barclays\npulse"}
-        />
-      </label>
-      <Button className="h-11 w-full rounded-2xl" type="submit">
-        {submitLabel}
-      </Button>
-    </form>
-  );
 }
 
 export default async function AccountsPage() {
@@ -163,7 +78,12 @@ export default async function AccountsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <AccountForm action={createAccount} submitLabel="Create account" />
+          <AccountForm
+            accountTypes={accountTypes}
+            action={createAccount}
+            defaultType={AccountType.CASH}
+            submitLabel="Create account"
+          />
         </CardContent>
       </Card>
 
@@ -223,7 +143,9 @@ export default async function AccountsPage() {
                   <div className="mt-4">
                     <AccountForm
                       account={account}
+                      accountTypes={accountTypes}
                       action={updateAction}
+                      defaultType={AccountType.CASH}
                       submitLabel="Save changes"
                     />
                   </div>

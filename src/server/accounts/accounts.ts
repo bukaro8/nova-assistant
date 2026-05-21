@@ -1,5 +1,7 @@
 import { prisma } from "@/server/db/prisma";
-import { normaliseExpenseText } from "@/server/expenses/categorise-expense";
+import {
+  normaliseAccountAlias,
+} from "@/lib/account-aliases";
 
 export type AccountForSelection = {
   id: string;
@@ -18,21 +20,6 @@ export type AccountWithBalance = AccountForSelection & {
   expenseCount: number;
   balance: number;
 };
-
-export function normaliseAccountAlias(alias: string) {
-  return normaliseExpenseText(alias);
-}
-
-export function parseAccountAliases(value: string) {
-  return Array.from(
-    new Set(
-      value
-        .split(/[\n,]+/)
-        .map(normaliseAccountAlias)
-        .filter(Boolean),
-    ),
-  );
-}
 
 export function calculateAccountBalance({
   openingBalance,
@@ -316,7 +303,7 @@ export function findAccountAliasInText({
   text: string;
   accounts: AccountForSelection[];
 }) {
-  const normalisedText = normaliseExpenseText(text);
+  const normalisedText = normaliseAccountAlias(text);
   const matches = accounts.flatMap((account) =>
     account.aliases
       .map((alias) => normaliseAccountAlias(alias))
