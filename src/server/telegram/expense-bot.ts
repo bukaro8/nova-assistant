@@ -90,6 +90,7 @@ function savedExpenseMessage(
     description: string;
     category: string;
     expenseDate: Date;
+    accountName?: string | null;
   },
   currency: string | null | undefined,
 ) {
@@ -99,6 +100,7 @@ function savedExpenseMessage(
     `Amount: ${formatMoney(expense.amount, currency)}`,
     `Description: ${expense.description}`,
     `Category: ${expense.category}`,
+    `Account: ${expense.accountName ?? "Default account"}`,
     `Date: ${formatExpenseDate(expense.expenseDate)}`,
   ].join("\n");
 }
@@ -221,6 +223,14 @@ async function handleExpenseMessage(message: TelegramMessage) {
   });
 
   if (!parsedExpense.ok) {
+    if (parsedExpense.reason === "unknown-account") {
+      await sendExpenseTelegramMessage(
+        chatId,
+        `I couldn't find an account called '${parsedExpense.accountAlias}'. Add it in Settings → Accounts.`,
+      );
+      return;
+    }
+
     await sendExpenseTelegramMessage(chatId, invalidTelegramExpenseMessage());
     console.warn(`Invalid expense format from chat ${chatId}: "${text}"`);
     return;
@@ -237,6 +247,7 @@ async function handleExpenseMessage(message: TelegramMessage) {
       source: "telegram",
       rawText: expenseData.rawText,
       expenseDate: expenseData.expenseDate,
+      accountId: expenseData.accountId,
     },
   });
 

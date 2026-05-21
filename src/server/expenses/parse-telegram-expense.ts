@@ -1,6 +1,6 @@
 import {
   categoriseExpense,
-  categoriseExpenseForUser,
+  normaliseExpenseText,
   type ExpenseCategorisation,
   type ExpenseCategoryRuleInput,
   type ExpenseCategoryValue,
@@ -14,6 +14,8 @@ type ParsedTelegramExpense = {
   category: ExpenseCategoryValue;
   confidence: number;
   matchedKeyword: string | null;
+  accountId?: string | null;
+  accountName?: string | null;
 };
 
 type ParseTelegramExpenseResult =
@@ -23,12 +25,39 @@ type ParseTelegramExpenseResult =
     }
   | {
       ok: false;
-      reason: "missing-amount" | "missing-description" | "invalid-date";
+      reason:
+        | "missing-amount"
+        | "missing-description"
+        | "invalid-date"
+        | "unknown-account";
+      accountAlias?: string;
     };
 
 const UK_TIME_ZONE = "Europe/London";
 const datePattern = /\b(\d{2})\/(\d{2})\/(\d{4})\b/;
 const amountPattern = /(^|[^a-z0-9/.])(-?\d+(?:\.\d{1,2})?)(?![a-z0-9/.])/;
+const commonAccountAliasHints = new Set([
+  "amex",
+  "bank",
+  "barclays",
+  "card",
+  "cash",
+  "chase",
+  "halifax",
+  "hsbc",
+  "lloyds",
+  "mastercard",
+  "monzo",
+  "nationwide",
+  "natwest",
+  "paypal",
+  "pulse",
+  "revolut",
+  "santander",
+  "starling",
+  "unknown",
+  "visa",
+]);
 
 function collapseSpaces(value: string) {
   return value.replace(/\s+/g, " ").trim();
@@ -120,12 +149,16 @@ function buildParsedExpense({
   description,
   expenseDate,
   categorisation,
+  accountId,
+  accountName,
 }: {
   rawText: string;
   amount: string;
   description: string;
   expenseDate: Date;
   categorisation: ExpenseCategorisation;
+  accountId?: string | null;
+  accountName?: string | null;
 }): ParsedTelegramExpense {
   return {
     amount,
@@ -135,7 +168,59 @@ function buildParsedExpense({
     category: categorisation.category,
     confidence: categorisation.confidence,
     matchedKeyword: categorisation.matchedKeyword,
+    accountId,
+    accountName,
   };
+}
+
+function unknownAccountAliasCandidate({
+  description,
+  amount,
+  userRules,
+}: {
+  description: string;
+  amount: string;
+  userRules: ExpenseCategoryRuleInput[];
+}) {
+  const words = description.split(/\s+/).filter(Boolean);
+
+  if (words.length < 2) {
+    return null;
+  }
+
+  for (let size = Math.min(3, words.length - 1); size >= 1; size -= 1) {
+    const prefix = words.slice(0, -size).join(" ");
+    const suffix = words.slice(-size).join(" ");
+    const normalisedSuffix = normaliseExpenseText(suffix);
+
+    if (
+      !prefix ||
+      !suffix ||
+      (!suffix.startsWith("@") && !commonAccountAliasHints.has(normalisedSuffix))
+    ) {
+      continue;
+    }
+
+    const prefixCategorisation = categoriseExpense({
+      text: prefix,
+      amount,
+      userRules,
+    });
+    const suffixCategorisation = categoriseExpense({
+      text: suffix,
+      amount: "1",
+      userRules,
+    });
+
+    if (
+      prefixCategorisation.category !== "OTHER" &&
+      suffixCategorisation.category === "OTHER"
+    ) {
+      return suffix;
+    }
+  }
+
+  return null;
 }
 
 export function parseTelegramExpenseMessage({
@@ -217,7 +302,47 @@ export async function parseTelegramExpenseMessageForUser({
     };
   }
 
-  const description = collapseSpaces(parsedAmount.textWithoutAmount);
+  const descriptionWithPossibleAccount = collapseSpaces(
+    parsedAmount.textWithoutAmount,
+  );
+
+  if (!descriptionWithPossibleAccount) {
+    return {
+      ok: false,
+      reason: "missing-description",
+    };
+  }
+
+  const [{ prisma }, accountHelpers] = await Promise.all([
+    import("@/server/db/prisma"),
+    import("@/server/accounts/accounts"),
+  ]);
+  const [userRules, accounts] = await Promise.all([
+    prisma.expenseCategoryRule.findMany({
+      where: {
+        userId,
+      },
+      select: {
+        category: true,
+        keyword: true,
+      },
+    }),
+    accountHelpers.getActiveAccountsForUser(userId),
+  ]);
+  const accountMatch = accountHelpers.findAccountAliasInText({
+    text: descriptionWithPossibleAccount,
+    accounts,
+  });
+  const account =
+    accountMatch?.account ?? accounts.find((candidate) => candidate.isDefault);
+  const description = accountMatch
+    ? collapseSpaces(
+        accountHelpers.removeAccountAliasFromText({
+          text: descriptionWithPossibleAccount,
+          alias: accountMatch.alias,
+        }),
+      )
+    : descriptionWithPossibleAccount;
 
   if (!description) {
     return {
@@ -226,10 +351,26 @@ export async function parseTelegramExpenseMessageForUser({
     };
   }
 
-  const categorisation = await categoriseExpenseForUser({
-    userId,
+  if (!accountMatch) {
+    const unknownAlias = unknownAccountAliasCandidate({
+      description: descriptionWithPossibleAccount,
+      amount: parsedAmount.amount,
+      userRules,
+    });
+
+    if (unknownAlias) {
+      return {
+        ok: false,
+        reason: "unknown-account",
+        accountAlias: unknownAlias,
+      };
+    }
+  }
+
+  const categorisation = categoriseExpense({
     text: description,
     amount: parsedAmount.amount,
+    userRules,
   });
 
   return {
@@ -240,6 +381,8 @@ export async function parseTelegramExpenseMessageForUser({
       description,
       expenseDate: parsedDate.expenseDate,
       categorisation,
+      accountId: account?.id ?? null,
+      accountName: account?.name ?? null,
     }),
   };
 }

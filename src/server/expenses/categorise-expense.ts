@@ -439,6 +439,22 @@ export function categoriseExpense({
   userRules?: ExpenseCategoryRuleInput[];
 }): ExpenseCategorisation {
   const normalisedText = normaliseExpenseText(text);
+  const numericAmount =
+    typeof amount === "number"
+      ? amount
+      : amount === null || amount === undefined || amount === ""
+        ? null
+        : Number(amount);
+
+  if (numericAmount !== null && !Number.isNaN(numericAmount) && numericAmount < 0) {
+    return {
+      category: ExpenseCategory.INCOME,
+      matchedKeyword: "negative amount",
+      confidence: 0.98,
+      source: "amount",
+    };
+  }
+
   const userOverrideMatch = matchRules({
     text: normalisedText,
     rules: userOverrideRules,
@@ -448,13 +464,6 @@ export function categoriseExpense({
   if (userOverrideMatch) {
     return userOverrideMatch;
   }
-
-  const numericAmount =
-    typeof amount === "number"
-      ? amount
-      : amount === null || amount === undefined || amount === ""
-        ? null
-        : Number(amount);
 
   const incomeKeywordMatch = matchRules({
     text: normalisedText,
@@ -490,15 +499,6 @@ export function categoriseExpense({
 
   if (builtInMatch) {
     return builtInMatch;
-  }
-
-  if (numericAmount !== null && !Number.isNaN(numericAmount) && numericAmount < 0) {
-    return {
-      category: ExpenseCategory.INCOME,
-      matchedKeyword: "negative amount",
-      confidence: 0.96,
-      source: "amount",
-    };
   }
 
   return {

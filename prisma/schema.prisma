@@ -23,6 +23,7 @@ model User {
   habits                Habit[]
   habitLogs             HabitLog[]
   expenses              Expense[]
+  accounts              Account[]
   recurringPayments     RecurringPayment[]
   expenseCategoryRules  ExpenseCategoryRule[]
   reminderLogs          ReminderLog[]
@@ -126,6 +127,8 @@ model Expense {
   id          String           @id @default(cuid())
   userId      String
   user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId   String?
+  account     Account?         @relation(fields: [accountId], references: [id], onDelete: SetNull)
   amount      Decimal          @db.Decimal(10, 2)
   description String
   rawText     String
@@ -140,8 +143,29 @@ model Expense {
   createdAt   DateTime         @default(now())
 
   @@index([userId, expenseDate])
+  @@index([accountId])
   @@index([recurringPaymentId])
   @@unique([recurringPaymentId, recurringForMonth])
+}
+
+model Account {
+  id             String      @id @default(cuid())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  type           AccountType
+  aliases        String[]
+  openingBalance Decimal     @default(0) @db.Decimal(10, 2)
+  dueDay         Int?
+  isDefault      Boolean     @default(false)
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  expenses       Expense[]
+
+  @@index([userId])
+  @@index([userId, isDefault])
+  @@index([userId, isActive])
 }
 
 model RecurringPayment {
@@ -212,6 +236,12 @@ enum HabitStatus {
 enum LogSource {
   telegram
   dashboard
+}
+
+enum AccountType {
+  CASH
+  BANK
+  CREDIT_CARD
 }
 
 enum ExpenseCategory {

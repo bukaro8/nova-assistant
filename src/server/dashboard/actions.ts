@@ -21,6 +21,7 @@ import {
 } from "@/server/expenses/categorise-expense";
 import { sendTelegramMessage } from "@/server/telegram/api";
 import { createTelegramConnectionCode } from "@/server/telegram/linking";
+import { getAccountOrDefault } from "@/server/accounts/accounts";
 
 const VALID_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -564,6 +565,7 @@ async function parseExpenseForm(userId: string, formData: FormData) {
   const rawAmount = String(formData.get("amount") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim();
+  const accountId = String(formData.get("accountId") ?? "").trim();
   const rawDate = String(formData.get("date") ?? "").trim();
   const amount = Number(rawAmount);
 
@@ -571,20 +573,29 @@ async function parseExpenseForm(userId: string, formData: FormData) {
     return null;
   }
 
-  const categorisation = Object.values(ExpenseCategory).includes(
-    category as ExpenseCategory,
-  )
-    ? {
-        category: category as ExpenseCategory,
-        confidence: 1,
-      }
-    : await categoriseExpenseForUser({
-        userId,
-        text: description,
-        amount: rawAmount,
-      });
+  const account = await getAccountOrDefault({
+    userId,
+    accountId,
+  });
+  const categorisation =
+    amount < 0
+      ? {
+          category: ExpenseCategory.INCOME,
+          confidence: 1,
+        }
+      : Object.values(ExpenseCategory).includes(category as ExpenseCategory)
+        ? {
+            category: category as ExpenseCategory,
+            confidence: 1,
+          }
+        : await categoriseExpenseForUser({
+            userId,
+            text: description,
+            amount: rawAmount,
+          });
 
   return {
+    accountId: account.id,
     amount: rawAmount,
     description,
     rawText: description,

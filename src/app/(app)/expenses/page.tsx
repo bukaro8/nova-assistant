@@ -29,12 +29,14 @@ import {
 import { requireCurrentUser } from "@/server/dashboard/user";
 import { prisma } from "@/server/db/prisma";
 import { getExpenseCategoryLabel } from "@/server/expenses/categorise-expense";
+import { getActiveAccountsForUser } from "@/server/accounts/accounts";
 
 export const dynamic = "force-dynamic";
 
 type ExpenseFilter = "week" | "month" | "all";
 type SearchParams = Promise<{
   filter?: string;
+  account?: string;
 }>;
 
 const categories = Object.values(ExpenseCategory);
@@ -88,14 +90,23 @@ function dateInputValue(date: Date) {
 function ExpenseForm({
   action,
   submitLabel,
+  accounts,
+  defaultAccountId,
   expense,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   submitLabel: string;
+  accounts: Array<{
+    id: string;
+    name: string;
+    isDefault: boolean;
+  }>;
+  defaultAccountId: string;
   expense?: {
     amount: unknown;
     description: string;
     category: string | null;
+    accountId: string | null;
     expenseDate: Date;
   };
 }) {
@@ -132,6 +143,21 @@ function ExpenseForm({
           </select>
         </label>
       </div>
+      <label className="block text-sm font-medium">
+        Account
+        <select
+          className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+          name="accountId"
+          defaultValue={expense?.accountId ?? defaultAccountId}
+        >
+          {accounts.map((account) => (
+            <option key={account.id} value={account.id}>
+              {account.name}
+              {account.isDefault ? " (default)" : ""}
+            </option>
+          ))}
+        </select>
+      </label>
       <label className="block text-sm font-medium">
         Description
         <input
@@ -180,6 +206,19 @@ export default async function ExpensesPage({
 
   const week = getCurrentUkWeekRange();
   const month = getCurrentUkMonthRange();
+  const accounts = await getActiveAccountsForUser(user.id);
+  const defaultAccount = accounts.find((account) => account.isDefault) ?? accounts[0];
+  const accountFilter = params.account ?? "all";
+  const accountWhere =
+    accountFilter === "unassigned"
+      ? {
+          accountId: null,
+        }
+      : accounts.some((account) => account.id === accountFilter)
+        ? {
+            accountId: accountFilter,
+          }
+        : {};
   const filterRange =
     filter === "week"
       ? { gte: week.start, lt: week.end }
@@ -196,6 +235,10 @@ export default async function ExpensesPage({
               expenseDate: filterRange,
             }
           : {}),
+        ...accountWhere,
+      },
+      include: {
+        account: true,
       },
       orderBy: {
         expenseDate: "desc",
@@ -297,6 +340,30 @@ export default async function ExpensesPage({
         ))}
       </section>
 
+      <section className="grid gap-2 sm:grid-cols-4">
+        {[
+          ["all", "All accounts"],
+          ...accounts.map((account) => [account.id, account.name]),
+          ["unassigned", "Unassigned"],
+        ].map(([value, label]) => (
+          <Link
+            key={value}
+            href={`/expenses?filter=${filter}&account=${value}`}
+            className={`flex h-11 items-center justify-center rounded-2xl border px-2 text-center text-sm font-medium ${
+              accountFilter === value ||
+              (accountFilter !== "unassigned" &&
+                accountFilter !== "all" &&
+                value === "all" &&
+                !accounts.some((account) => account.id === accountFilter))
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-card text-muted-foreground"
+            }`}
+          >
+            {label}
+          </Link>
+        ))}
+      </section>
+
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader>
@@ -355,7 +422,12 @@ export default async function ExpensesPage({
           <CardDescription>Manual entry for non-Telegram expenses.</CardDescription>
         </CardHeader>
         <CardContent>
-          <ExpenseForm action={createExpense} submitLabel="Save expense" />
+          <ExpenseForm
+            accounts={accounts}
+            action={createExpense}
+            defaultAccountId={defaultAccount.id}
+            submitLabel="Save expense"
+          />
         </CardContent>
       </Card>
 
@@ -412,6 +484,7 @@ export default async function ExpensesPage({
                     </CardTitle>
                     <CardDescription>
                       {getExpenseCategoryLabel(expense.category)} ·{" "}
+                      {expense.account?.name ?? "Unassigned"} ·{" "}
                       {formatUkDate(expense.expenseDate)}
                     </CardDescription>
                   </div>
@@ -426,9 +499,11 @@ export default async function ExpensesPage({
                     </summary>
                     <div className="mt-4">
                       <ExpenseForm
+                        accounts={accounts}
                         action={updateAction}
-                        submitLabel="Save changes"
+                        defaultAccountId={defaultAccount.id}
                         expense={expense}
+                        submitLabel="Save changes"
                       />
                     </div>
                   </details>

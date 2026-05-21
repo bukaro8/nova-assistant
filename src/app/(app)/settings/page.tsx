@@ -312,16 +312,33 @@ export default async function SettingsPage({
             <ArrowUpRight className="size-4" />
           </Link>
           {user.assistantExpenses ? (
-            <Link
-              href="/expenses/categories"
-              className="flex min-h-16 items-center justify-between rounded-2xl border border-border bg-background px-4 text-foreground transition-colors hover:bg-muted"
-            >
-              <span className="flex items-center gap-3">
-                <ReceiptText className="size-5 text-primary" />
-                Expense category keywords
-              </span>
-              <ArrowUpRight className="size-4" />
-            </Link>
+            <>
+              <Link
+                href="/settings/accounts"
+                className="flex min-h-16 items-center justify-between rounded-2xl border border-border bg-background px-4 text-foreground transition-colors hover:bg-muted"
+              >
+                <span className="flex items-center gap-3">
+                  <WalletCards className="size-5 text-primary" />
+                  <span>
+                    <span className="block font-medium">Accounts</span>
+                    <span className="block text-sm text-muted-foreground">
+                      Manage cash, bank accounts and credit cards.
+                    </span>
+                  </span>
+                </span>
+                <ArrowUpRight className="size-4" />
+              </Link>
+              <Link
+                href="/expenses/categories"
+                className="flex min-h-16 items-center justify-between rounded-2xl border border-border bg-background px-4 text-foreground transition-colors hover:bg-muted"
+              >
+                <span className="flex items-center gap-3">
+                  <ReceiptText className="size-5 text-primary" />
+                  Expense category keywords
+                </span>
+                <ArrowUpRight className="size-4" />
+              </Link>
+            </>
           ) : null}
           <div className="rounded-2xl border border-border bg-background p-4">
             <div className="mb-3 flex items-center gap-3 text-foreground">

@@ -105,6 +105,7 @@ function savedExpenseMessage(
     description: string;
     category: string;
     expenseDate: Date;
+    accountName?: string | null;
   },
   currency: string | null | undefined,
 ) {
@@ -114,6 +115,7 @@ function savedExpenseMessage(
     `Amount: ${formatCurrency(Number(expense.amount), currency)}`,
     `Description: ${expense.description}`,
     `Category: ${expense.category}`,
+    `Account: ${expense.accountName ?? "Default account"}`,
     `Date: ${formatExpenseDate(expense.expenseDate)}`,
   ].join("\n");
 }
@@ -210,6 +212,14 @@ async function handleExpense({
   });
 
   if (!parsedExpense.ok) {
+    if (parsedExpense.reason === "unknown-account") {
+      await sendTelegramMessage(
+        chatId,
+        `I couldn't find an account called '${parsedExpense.accountAlias}'. Add it in Settings → Accounts.`,
+      );
+      return "rejected";
+    }
+
     if (parsedExpense.reason === "missing-amount") {
       return "not-expense";
     }
@@ -241,6 +251,7 @@ async function handleExpense({
       source: "telegram",
       rawText: expenseData.rawText,
       expenseDate: expenseData.expenseDate,
+      accountId: expenseData.accountId,
     },
   });
 
