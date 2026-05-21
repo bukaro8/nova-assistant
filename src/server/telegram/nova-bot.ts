@@ -59,6 +59,12 @@ function normalizeIncomingText(text: string) {
   return text.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+function isTransferCandidate(normalizedText: string) {
+  const words = normalizedText.split(" ").filter(Boolean);
+
+  return normalizedText.includes(" transfer ") || words[1] === "transfer";
+}
+
 function getLocalDayRange(date: Date) {
   const start = new Date(date);
   start.setHours(0, 0, 0, 0);
@@ -100,6 +106,38 @@ function unknownMessage() {
   ].join("\n");
 }
 
+function transferValidationMessage(
+  parsedExpense: Awaited<ReturnType<typeof parseTelegramExpenseMessageForUser>>,
+) {
+  if (!parsedExpense.ok) {
+    if (parsedExpense.reason === "missing-transfer-account") {
+      return "Please specify both accounts. Example: 50 transfer barclays pulse";
+    }
+
+    if (parsedExpense.reason === "same-transfer-account") {
+      return "Source and destination accounts must be different.";
+    }
+
+    if (
+      parsedExpense.reason === "invalid-transfer-amount" ||
+      parsedExpense.reason === "missing-amount"
+    ) {
+      return "Transfer amount must be positive.";
+    }
+
+    if (parsedExpense.reason === "unknown-account") {
+      return `I couldn't find an account called '${parsedExpense.accountAlias}'. Add it in Settings → Accounts.`;
+    }
+  }
+
+  return [
+    "I couldn't understand that transfer.",
+    "",
+    "Try:",
+    "50 transfer barclays pulse",
+  ].join("\n");
+}
+
 function savedExpenseMessage(
   expense: {
     amount: string;
@@ -136,6 +174,46 @@ function savedTransferMessage(
     `From: ${transfer.fromAccountName}`,
     `To: ${transfer.toAccountName}`,
   ].join("\n");
+}
+
+async function saveTransfer({
+  chatId,
+  transferData,
+  user,
+}: {
+  chatId: string;
+  transferData: {
+    amount: string;
+    rawText: string;
+    expenseDate: Date;
+    fromAccountId: string;
+    fromAccountName: string;
+    toAccountId: string;
+    toAccountName: string;
+  };
+  user: NonNullable<Awaited<ReturnType<typeof findLinkedUser>>>;
+}) {
+  await createAccountTransfer({
+    userId: user.id,
+    amount: transferData.amount,
+    fromAccount: {
+      id: transferData.fromAccountId,
+      name: transferData.fromAccountName,
+    },
+    toAccount: {
+      id: transferData.toAccountId,
+      name: transferData.toAccountName,
+    },
+    rawText: transferData.rawText,
+    source: "telegram",
+    createdVia: "telegram",
+    expenseDate: transferData.expenseDate,
+  });
+
+  await sendTelegramMessage(
+    chatId,
+    savedTransferMessage(transferData, user.currency),
+  );
 }
 
 async function findLinkedUser(chatId: string) {
@@ -191,6 +269,66 @@ async function handleStartCode(chatId: string, code: string) {
     "❌ Invalid or expired NOVA connection. Open NOVA Settings and try again.",
   );
   console.warn("Invalid NOVA Telegram /start connection code.");
+}
+
+async function handleTransfer({
+  chatId,
+  text,
+  user,
+}: {
+  chatId: string;
+  text: string;
+  user: NonNullable<Awaited<ReturnType<typeof findLinkedUser>>>;
+}): Promise<"saved" | "rejected" | "disabled"> {
+  debug("Transfer parser attempted.", {
+    chatId,
+    userId: user.id,
+    transferParserAttempted: true,
+  });
+
+  const parsedExpense = await parseTelegramExpenseMessageForUser({
+    userId: user.id,
+    text,
+  });
+  const transferMatched = parsedExpense.ok && parsedExpense.type === "transfer";
+  const rejectionReason = parsedExpense.ok
+    ? transferMatched
+      ? null
+      : "not-transfer"
+    : parsedExpense.reason;
+
+  debug("Transfer parser result.", {
+    chatId,
+    userId: user.id,
+    transferParserAttempted: true,
+    transferParserMatched: transferMatched,
+    transferParserRejectedReason: rejectionReason,
+  });
+
+  if (!transferMatched) {
+    await sendTelegramMessage(chatId, transferValidationMessage(parsedExpense));
+    return "rejected";
+  }
+
+  if (!user.assistantExpenses) {
+    debug("Transfer parser succeeded but expense tracking is disabled.", {
+      chatId,
+      userId: user.id,
+    });
+    await sendTelegramMessage(
+      chatId,
+      "Expense tracking is disabled. Enable it in NOVA Settings.",
+    );
+    return "disabled";
+  }
+
+  await saveTransfer({
+    chatId,
+    transferData: parsedExpense.transfer,
+    user,
+  });
+
+  return "saved";
 }
 
 async function handleExpense({
@@ -289,29 +427,11 @@ async function handleExpense({
   }
 
   if (parsedExpense.type === "transfer") {
-    const transferData = parsedExpense.transfer;
-
-    await createAccountTransfer({
-      userId: user.id,
-      amount: transferData.amount,
-      fromAccount: {
-        id: transferData.fromAccountId,
-        name: transferData.fromAccountName,
-      },
-      toAccount: {
-        id: transferData.toAccountId,
-        name: transferData.toAccountName,
-      },
-      rawText: transferData.rawText,
-      source: "telegram",
-      createdVia: "telegram",
-      expenseDate: transferData.expenseDate,
-    });
-
-    await sendTelegramMessage(
+    await saveTransfer({
       chatId,
-      savedTransferMessage(transferData, user.currency),
-    );
+      transferData: parsedExpense.transfer,
+      user,
+    });
 
     return "saved";
   }
@@ -526,13 +646,15 @@ async function handleNovaMessage(message: TelegramMessage) {
 
   const matchingHabits = await findMatchingHabit(user.id, text);
   const habitMatched = matchingHabits.length > 0;
+  const transferCandidate = isTransferCandidate(normalizedText);
 
   debug("Priority decision after habit match.", {
     chatId,
     userId: user.id,
     habitMatched,
     habitMatchCount: matchingHabits.length,
-    expenseParserWillBeAttempted: !habitMatched,
+    transferParserWillBeAttempted: !habitMatched && transferCandidate,
+    expenseParserWillBeAttempted: !habitMatched && !transferCandidate,
   });
 
   if (habitMatched) {
@@ -543,6 +665,18 @@ async function handleNovaMessage(message: TelegramMessage) {
       user,
       matchingHabits,
     });
+    return;
+  }
+
+  if (transferCandidate) {
+    const transferResult = await handleTransfer({ chatId, text, user });
+
+    debug("Post-transfer parser routing result.", {
+      chatId,
+      result: transferResult,
+      expenseParserSkipped: true,
+    });
+
     return;
   }
 
