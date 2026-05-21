@@ -32,6 +32,7 @@ import {
   getHabitStats,
 } from "@/lib/habit-stats";
 import { formatCurrency } from "@/lib/currency";
+import { ExpenseCategory } from "@/generated/prisma/enums";
 import {
   findClosestWeightLog,
   formatWeightChange,
@@ -55,6 +56,26 @@ function categoryLabel(category: string | null) {
   }
 
   return category.charAt(0) + category.slice(1).toLowerCase();
+}
+
+function isSpendingExpense(expense: {
+  amount: unknown;
+  category: string | null;
+}) {
+  return Number(expense.amount) > 0 && expense.category !== ExpenseCategory.INCOME;
+}
+
+function incomeAmount(expense: {
+  amount: unknown;
+  category: string | null;
+}) {
+  const amount = Number(expense.amount);
+
+  if (expense.category === ExpenseCategory.INCOME || amount < 0) {
+    return Math.abs(amount);
+  }
+
+  return 0;
 }
 
 function getGreeting() {
@@ -182,16 +203,19 @@ export default async function DashboardPage() {
   const habitTotal = todaysHabits.length;
   const doneTotal = completedToday.size;
   const score = habitTotal === 0 ? 0 : Math.round((doneTotal / habitTotal) * 100);
-  const positiveExpenses = weekExpenses.filter(
-    (expense) => Number(expense.amount) > 0,
-  );
-  const weekTotal = positiveExpenses.reduce(
+  const spendingExpenses = weekExpenses.filter(isSpendingExpense);
+  const weekSpending = spendingExpenses.reduce(
     (total, expense) => total + Number(expense.amount),
     0,
   );
+  const weekIncome = weekExpenses.reduce(
+    (total, expense) => total + incomeAmount(expense),
+    0,
+  );
+  const weekNet = weekIncome - weekSpending;
   const categoryTotals = new Map<string, number>();
 
-  for (const expense of positiveExpenses) {
+  for (const expense of spendingExpenses) {
     const category = categoryLabel(expense.category);
     categoryTotals.set(
       category,
@@ -273,7 +297,7 @@ export default async function DashboardPage() {
     ...habitStats.map((stats) => stats.currentStreak),
   );
 
-  for (const expense of positiveExpenses) {
+  for (const expense of spendingExpenses) {
     const key = getUkClock(expense.expenseDate).dateKey;
     const point = chartData.find((day) => day.key === key);
 
@@ -455,7 +479,7 @@ export default async function DashboardPage() {
             <div className="flex items-end justify-between gap-3">
               <div>
                 <div className="text-4xl font-semibold tracking-tight">
-                  {formatCurrency(weekTotal, user.currency)}
+                  {formatCurrency(weekSpending, user.currency)}
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {biggestCategory
@@ -468,6 +492,32 @@ export default async function DashboardPage() {
                   {formatCurrency(biggestCategory[1], user.currency)}
                 </div>
               ) : null}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="rounded-2xl border border-border bg-background/40 p-3">
+                <div className="text-xs text-muted-foreground">
+                  Income this period
+                </div>
+                <div className="mt-1 font-semibold">
+                  {formatCurrency(weekIncome, user.currency)}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-border bg-background/40 p-3">
+                <div className="text-xs text-muted-foreground">
+                  Spending this period
+                </div>
+                <div className="mt-1 font-semibold">
+                  {formatCurrency(weekSpending, user.currency)}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-border bg-background/40 p-3">
+                <div className="text-xs text-muted-foreground">
+                  Net position
+                </div>
+                <div className="mt-1 font-semibold">
+                  {formatCurrency(weekNet, user.currency)}
+                </div>
+              </div>
             </div>
             <WeeklySpendingChart data={chartData} currency={user.currency} />
             <Link

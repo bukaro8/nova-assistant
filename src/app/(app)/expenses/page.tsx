@@ -52,11 +52,44 @@ function getFilter(value: string | undefined): ExpenseFilter {
 function totalSpend(
   expenses: Array<{
     amount: unknown;
+    category: string | null;
   }>,
 ) {
-  return expenses
-    .filter((expense) => Number(expense.amount) > 0)
-    .reduce((total, expense) => total + Number(expense.amount), 0);
+  return expenses.reduce(
+    (total, expense) =>
+      isSpendingExpense(expense)
+        ? total + Number(expense.amount)
+        : total,
+    0,
+  );
+}
+
+function totalIncome(
+  expenses: Array<{
+    amount: unknown;
+    category: string | null;
+  }>,
+) {
+  return expenses.reduce((total, expense) => {
+    const amount = Number(expense.amount);
+
+    if (expense.category === ExpenseCategory.INCOME) {
+      return total + Math.abs(amount);
+    }
+
+    if (amount < 0) {
+      return total + Math.abs(amount);
+    }
+
+    return total;
+  }, 0);
+}
+
+function isSpendingExpense(expense: {
+  amount: unknown;
+  category: string | null;
+}) {
+  return Number(expense.amount) > 0 && expense.category !== ExpenseCategory.INCOME;
 }
 
 function buildCategoryData(
@@ -70,7 +103,7 @@ function buildCategoryData(
   for (const expense of expenses) {
     const amount = Number(expense.amount);
 
-    if (amount <= 0) {
+    if (!isSpendingExpense(expense)) {
       continue;
     }
 
@@ -271,6 +304,8 @@ export default async function ExpensesPage({
   const weeklyTotal = totalSpend(weekExpenses);
   const monthlyTotal = totalSpend(monthExpenses);
   const filteredTotal = totalSpend(filteredExpenses);
+  const filteredIncome = totalIncome(filteredExpenses);
+  const filteredNet = filteredIncome - filteredTotal;
   const categoryData = buildCategoryData(filteredExpenses);
   const biggestCategory = categoryData[0];
   const chartData = getWeekChartDays(week.start);
@@ -278,7 +313,7 @@ export default async function ExpensesPage({
   for (const expense of weekExpenses) {
     const amount = Number(expense.amount);
 
-    if (amount <= 0) {
+    if (!isSpendingExpense(expense)) {
       continue;
     }
 
@@ -412,6 +447,36 @@ export default async function ExpensesPage({
                 No spending yet.
               </div>
             )}
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Income</CardTitle>
+            <CardDescription>Selected period</CardDescription>
+          </CardHeader>
+          <CardContent className="text-2xl font-semibold">
+            {formatCurrency(filteredIncome, user.currency)}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Spending</CardTitle>
+            <CardDescription>Selected period</CardDescription>
+          </CardHeader>
+          <CardContent className="text-2xl font-semibold">
+            {formatCurrency(filteredTotal, user.currency)}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Net position</CardTitle>
+            <CardDescription>Income minus spending</CardDescription>
+          </CardHeader>
+          <CardContent className="text-2xl font-semibold">
+            {formatCurrency(filteredNet, user.currency)}
           </CardContent>
         </Card>
       </section>
