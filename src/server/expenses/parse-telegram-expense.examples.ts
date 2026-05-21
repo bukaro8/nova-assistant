@@ -1,5 +1,6 @@
 import { ExpenseCategory } from "./categorise-expense";
 import { parseTelegramExpenseMessage } from "./parse-telegram-expense";
+import { calculateAccountBalance } from "@/server/accounts/accounts";
 
 const examples = [
   {
@@ -203,4 +204,46 @@ if (noAmount.ok || noAmount.reason !== "missing-amount") {
   throw new Error("milk: expected missing-amount failure");
 }
 
-console.log(`Parsed ${examples.length} Telegram expense examples.`);
+const balanceExamples = [
+  {
+    name: "Barclays opening 0 + 179 wages",
+    openingBalance: 0,
+    entries: [{ amount: "179", category: ExpenseCategory.INCOME }],
+    expected: 179,
+  },
+  {
+    name: "Barclays opening 0 + 10 milk",
+    openingBalance: 0,
+    entries: [{ amount: "10", category: ExpenseCategory.GROCERIES }],
+    expected: -10,
+  },
+  {
+    name: "PayPal credit opening 0 + 100 milk",
+    openingBalance: 0,
+    entries: [{ amount: "100", category: ExpenseCategory.GROCERIES }],
+    expected: -100,
+  },
+  {
+    name: "PayPal credit opening -100 + 50 transfer in",
+    openingBalance: -100,
+    entries: [{ amount: "-50", category: ExpenseCategory.TRANSFER }],
+    expected: -50,
+  },
+];
+
+for (const example of balanceExamples) {
+  const balance = calculateAccountBalance({
+    openingBalance: example.openingBalance,
+    entries: example.entries,
+  });
+
+  if (balance !== example.expected) {
+    throw new Error(
+      `${example.name}: got ${balance}, expected ${example.expected}`,
+    );
+  }
+}
+
+console.log(
+  `Parsed ${examples.length} Telegram expense examples and ${balanceExamples.length} balance examples.`,
+);

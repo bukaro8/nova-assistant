@@ -2,6 +2,7 @@ import { prisma } from "@/server/db/prisma";
 import {
   normaliseAccountAlias,
 } from "@/lib/account-aliases";
+import { ExpenseCategory } from "@/generated/prisma/enums";
 
 export type AccountForSelection = {
   id: string;
@@ -21,19 +22,46 @@ export type AccountWithBalance = AccountForSelection & {
   balance: number;
 };
 
+export type AccountBalanceEntry = {
+  amount: unknown;
+  category: string | null;
+};
+
+function accountBalanceMovement(entry: AccountBalanceEntry) {
+  const amount = Number(entry.amount);
+
+  if (!Number.isFinite(amount)) {
+    return 0;
+  }
+
+  if (entry.category === ExpenseCategory.INCOME) {
+    return Math.abs(amount);
+  }
+
+  if (entry.category === ExpenseCategory.TRANSFER) {
+    return -amount;
+  }
+
+  if (amount < 0) {
+    return Math.abs(amount);
+  }
+
+  return -amount;
+}
+
 export function calculateAccountBalance({
   openingBalance,
-  expenseAmounts,
+  entries,
 }: {
   openingBalance: unknown;
-  expenseAmounts: unknown[];
+  entries: AccountBalanceEntry[];
 }) {
-  const movementTotal = expenseAmounts.reduce<number>(
-    (total, amount) => total + Number(amount),
+  const movementTotal = entries.reduce<number>(
+    (total, entry) => total + accountBalanceMovement(entry),
     0,
   );
 
-  return Number(openingBalance) - movementTotal;
+  return Number(openingBalance) + movementTotal;
 }
 
 function isUniqueConstraintError(error: unknown) {
@@ -172,6 +200,7 @@ export async function getAccountsWithBalances(userId: string) {
       expenses: {
         select: {
           amount: true,
+          category: true,
         },
       },
       _count: {
@@ -207,7 +236,10 @@ export async function getAccountsWithBalances(userId: string) {
     expenseCount: account._count.expenses,
     balance: calculateAccountBalance({
       openingBalance: account.openingBalance,
-      expenseAmounts: account.expenses.map((expense) => expense.amount),
+      entries: account.expenses.map((expense) => ({
+        amount: expense.amount,
+        category: expense.category,
+      })),
     }),
   }));
 }
