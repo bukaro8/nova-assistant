@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   ArrowUpRight,
+  BarChart3,
   Dumbbell,
   Plus,
   ReceiptText,
@@ -626,6 +627,22 @@ export default async function DashboardPage() {
       ) : null}
 
       <section className="grid grid-cols-2 gap-3">
+        <Link
+          href="/reports/weekly"
+          className="flex min-h-24 flex-col justify-between rounded-3xl border border-border bg-card/80 p-4 shadow-sm backdrop-blur transition-colors hover:bg-muted"
+        >
+          <BarChart3 className="size-6 text-primary" />
+          <span className="space-y-1 text-sm font-medium">
+            <span className="block">Reports</span>
+            <span className="block text-xs font-normal text-muted-foreground">
+              View trends and insights
+            </span>
+            <span className="flex items-center justify-between">
+              Open reports
+              <ArrowUpRight className="size-4" />
+            </span>
+          </span>
+        </Link>
         {user.assistantHabits ? (
           <Link
             href="/habits"
