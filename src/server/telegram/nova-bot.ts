@@ -86,11 +86,34 @@ function formatExpenseDate(date: Date) {
 
 function helpMessage() {
   return [
-    "NOVA Assistant can help you from Telegram.",
+    "🚀 NOVA Assistant",
     "",
-    "Log habit: Study",
-    "Log expense: 15.48 aldi",
-    "Connect account: use the button in NOVA Settings",
+    "📌 Habits",
+    "study",
+    "duta",
+    "",
+    "💸 Expenses",
+    "10 milk",
+    "milk 10",
+    "10 milk barclays",
+    "",
+    "💰 Income",
+    "179 wages barclays",
+    "330 salary barclays",
+    "",
+    "🔁 Transfers",
+    "50 transfer barclays paypal",
+    "100 transfer cash barclays",
+    "",
+    "🏦 Accounts",
+    "Use aliases like:",
+    "barclays",
+    "paypal",
+    "cash",
+    "",
+    "⚙️ Tip",
+    "If you don't specify an account,",
+    "NOVA uses your default account.",
   ].join("\n");
 }
 
