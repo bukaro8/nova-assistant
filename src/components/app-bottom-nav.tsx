@@ -10,6 +10,7 @@ import {
   ReceiptText,
   Scale,
   Settings,
+  WalletCards,
 } from "lucide-react";
 
 import { NovaBrand } from "@/components/nova-brand";
@@ -35,6 +36,11 @@ const navItems = [
     href: "/expenses",
     label: "Expenses",
     icon: ReceiptText,
+  },
+  {
+    href: "/accounts",
+    label: "Accounts",
+    icon: WalletCards,
   },
   {
     href: "/weight",
@@ -66,7 +72,10 @@ export function AppBottomNav({
       return false;
     }
 
-    if (item.href === "/expenses" && !preferences.assistantExpenses) {
+    if (
+      (item.href === "/expenses" || item.href === "/accounts") &&
+      !preferences.assistantExpenses
+    ) {
       return false;
     }
 
@@ -77,7 +86,9 @@ export function AppBottomNav({
     return true;
   });
   const mobileGridClass =
-    visibleItems.length === 6
+    visibleItems.length === 7
+      ? "grid-cols-7"
+      : visibleItems.length === 6
       ? "grid-cols-6"
       : visibleItems.length === 5
         ? "grid-cols-5"

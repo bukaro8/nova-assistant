@@ -16,7 +16,7 @@ import { prisma } from "@/server/db/prisma";
 
 function accountsRedirectMessage(type: "success" | "error", message: string): never {
   const params = new URLSearchParams({ type, message });
-  redirect(`/settings/accounts?${params.toString()}`);
+  redirect(`/accounts?${params.toString()}`);
 }
 
 function parseDueDay(value: string, type: AccountType) {
@@ -70,6 +70,7 @@ function parseAccountForm(formData: FormData) {
 
 function revalidateAccountPaths() {
   revalidatePath("/settings");
+  revalidatePath("/accounts");
   revalidatePath("/settings/accounts");
   revalidatePath("/expenses");
   revalidatePath("/today");

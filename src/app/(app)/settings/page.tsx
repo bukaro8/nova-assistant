@@ -314,7 +314,7 @@ export default async function SettingsPage({
           {user.assistantExpenses ? (
             <>
               <Link
-                href="/settings/accounts"
+                href="/accounts"
                 className="flex min-h-16 items-center justify-between rounded-2xl border border-border bg-background px-4 text-foreground transition-colors hover:bg-muted"
               >
                 <span className="flex items-center gap-3">
