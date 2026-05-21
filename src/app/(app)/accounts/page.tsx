@@ -1,15 +1,15 @@
 import Link from "next/link";
-import { ArrowLeft, CreditCard, Landmark, Plus, Wallet } from "lucide-react";
+import type { ReactNode } from "react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  CreditCard,
+  Landmark,
+  Wallet,
+} from "lucide-react";
 
 import { HabitToast } from "@/components/habit-manage-controls";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { AccountType, ExpenseCategory } from "@/generated/prisma/enums";
 import { formatCurrency } from "@/lib/currency";
 import {
@@ -21,14 +21,9 @@ import {
   updateAccount,
 } from "@/server/accounts/actions";
 import { getAccountsWithBalances } from "@/server/accounts/accounts";
-import {
-  formatUkDate,
-  getCurrentUkMonthRange,
-  getUkClock,
-} from "@/server/dashboard/date-utils";
+import { getCurrentUkMonthRange, getUkClock } from "@/server/dashboard/date-utils";
 import { requireCurrentUser } from "@/server/dashboard/user";
 import { prisma } from "@/server/db/prisma";
-import { getExpenseCategoryLabel } from "@/server/expenses/categorise-expense";
 import { AccountForm } from "../settings/accounts/account-form";
 
 export const dynamic = "force-dynamic";
@@ -142,6 +137,7 @@ function getCreditCardDueInfo(dueDay: number) {
   const daysUntilDue = Math.round((dueUtc - todayUtc) / 86_400_000);
 
   return {
+    daysUntilDue,
     dueLabel: `Due on ${ordinalDay(dueDay)}`,
     daysLabel:
       daysUntilDue === 0
@@ -149,22 +145,55 @@ function getCreditCardDueInfo(dueDay: number) {
         : daysUntilDue === 1
           ? "Due in 1 day"
           : `Due in ${daysUntilDue} days`,
+    shortDaysLabel:
+      daysUntilDue === 0
+        ? "due today"
+        : daysUntilDue === 1
+          ? "due in 1d"
+          : `due in ${daysUntilDue}d`,
   };
 }
 
-function transactionAmountClass(expense: {
-  amount: unknown;
-  category: string | null;
+function dueStatusClass(daysUntilDue: number) {
+  if (daysUntilDue <= 1) {
+    return "text-destructive";
+  }
+
+  if (daysUntilDue < 7) {
+    return "text-amber-600 dark:text-amber-400";
+  }
+
+  return "text-muted-foreground";
+}
+
+function FoldableSection({
+  children,
+  description,
+  open = false,
+  title,
+}: {
+  children: ReactNode;
+  description?: string;
+  open?: boolean;
+  title: string;
 }) {
-  if (expense.category === ExpenseCategory.TRANSFER) {
-    return "text-muted-foreground";
-  }
-
-  if (expense.category === ExpenseCategory.INCOME || Number(expense.amount) < 0) {
-    return "text-emerald-600";
-  }
-
-  return "text-destructive";
+  return (
+    <details
+      className="group rounded-3xl border border-border bg-card text-card-foreground shadow-sm"
+      open={open}
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 [&::-webkit-details-marker]:hidden">
+        <div className="min-w-0">
+          <h2 className="truncate text-base font-semibold">{title}</h2>
+          {description ? (
+            <p className="truncate text-sm text-muted-foreground">{description}</p>
+          ) : null}
+        </div>
+        <ChevronDown className="size-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="border-t border-border px-4 py-4">{children}</div>
+    </details>
+  );
 }
 
 export default async function AccountsPage() {
@@ -172,46 +201,15 @@ export default async function AccountsPage() {
   const month = getCurrentUkMonthRange();
   const accounts = await getAccountsWithBalances(user.id);
   const activeAccounts = accounts.filter((account) => account.isActive);
-  const [monthExpenses, recentActivity] = await Promise.all([
-    prisma.expense.findMany({
-      where: {
-        userId: user.id,
-        expenseDate: {
-          gte: month.start,
-          lt: month.end,
-        },
+  const monthExpenses = await prisma.expense.findMany({
+    where: {
+      userId: user.id,
+      expenseDate: {
+        gte: month.start,
+        lt: month.end,
       },
-      include: {
-        account: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-          },
-        },
-      },
-      orderBy: {
-        expenseDate: "desc",
-      },
-    }),
-    prisma.expense.findMany({
-      where: {
-        userId: user.id,
-      },
-      include: {
-        account: {
-          select: {
-            name: true,
-            type: true,
-          },
-        },
-      },
-      orderBy: {
-        expenseDate: "desc",
-      },
-      take: 10,
-    }),
-  ]);
+    },
+  });
   const availableMoney = activeAccounts
     .filter(
       (account) =>
@@ -230,29 +228,6 @@ export default async function AccountsPage() {
     (total, expense) => total + Number(expense.amount),
     0,
   );
-  const monthSpendingByAccount = Array.from(
-    monthSpendingExpenses.reduce<
-      Map<string, { accountId: string; accountName: string; total: number }>
-    >(
-      (totals, expense) => {
-        const key = expense.accountId ?? "no-account";
-        const accountName = expense.account?.name ?? "No account";
-        const current = totals.get(key) ?? {
-          accountId: key,
-          accountName,
-          total: 0,
-        };
-
-        current.total += Number(expense.amount);
-        totals.set(key, current);
-
-        return totals;
-      },
-      new Map(),
-    ),
-  )
-    .map(([, value]) => value)
-    .sort((a, b) => b.total - a.total);
   const creditCardAccounts = activeAccounts.filter(
     (account) => account.type === AccountType.CREDIT_CARD,
   );
@@ -274,261 +249,166 @@ export default async function AccountsPage() {
         </div>
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Available money</CardDescription>
-            <CardTitle
-              className={
+      <FoldableSection
+        description="Money, debt and this month at a glance."
+        open
+        title="Summary"
+      >
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-border bg-background/40 p-3">
+            <div className="text-xs text-muted-foreground">Available money</div>
+            <div
+              className={`mt-1 text-lg font-semibold ${
                 availableMoney < 0 ? "text-destructive" : "text-emerald-600"
-              }
+              }`}
             >
               {formatCurrency(availableMoney, user.currency)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Credit card debt</CardDescription>
-            <CardTitle className="text-destructive">
+            </div>
+          </div>
+          <div className="rounded-2xl border border-border bg-background/40 p-3">
+            <div className="text-xs text-muted-foreground">Credit card debt</div>
+            <div className="mt-1 text-lg font-semibold text-destructive">
               {formatCurrency(creditCardDebt, user.currency)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Net position</CardDescription>
-            <CardTitle
-              className={netPosition < 0 ? "text-destructive" : "text-emerald-600"}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-border bg-background/40 p-3">
+            <div className="text-xs text-muted-foreground">Net position</div>
+            <div
+              className={`mt-1 text-lg font-semibold ${
+                netPosition < 0 ? "text-destructive" : "text-emerald-600"
+              }`}
             >
               {formatCurrency(netPosition, user.currency)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>This month spending</CardDescription>
-            <CardTitle>{formatCurrency(monthSpending, user.currency)}</CardTitle>
-          </CardHeader>
-        </Card>
-      </section>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-border bg-background/40 p-3">
+            <div className="text-xs text-muted-foreground">This month spending</div>
+            <div className="mt-1 text-lg font-semibold">
+              {formatCurrency(monthSpending, user.currency)}
+            </div>
+          </div>
+        </div>
+      </FoldableSection>
 
-      <section className="grid gap-3 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Credit card due dates</CardTitle>
-            <CardDescription>Payment reminders for active cards.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {creditCardAccounts.length > 0 ? (
-              creditCardAccounts.map((account) => {
-                const owedAmount = account.balance < 0 ? Math.abs(account.balance) : 0;
-                const dueInfo = account.dueDay
-                  ? getCreditCardDueInfo(account.dueDay)
-                  : null;
+      <FoldableSection
+        description="Compact card payment reminders."
+        title="Credit card due dates"
+      >
+        <div className="space-y-2">
+          {creditCardAccounts.length > 0 ? (
+            creditCardAccounts.map((account) => {
+              const owedAmount = account.balance < 0 ? Math.abs(account.balance) : 0;
+              const dueInfo = account.dueDay
+                ? getCreditCardDueInfo(account.dueDay)
+                : null;
 
-                return (
-                  <div
-                    key={account.id}
-                    className="flex items-start justify-between gap-3 rounded-2xl border border-border bg-background/40 p-3"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold">
-                        {account.name}
-                      </div>
-                      <div
-                        className={
-                          owedAmount > 0
-                            ? "text-sm font-medium text-destructive"
-                            : "text-sm font-medium text-emerald-600"
-                        }
-                      >
-                        {owedAmount > 0
-                          ? `${formatCurrency(owedAmount, user.currency)} owed`
-                          : `${formatCurrency(Math.max(account.balance, 0), user.currency)} credit`}
-                      </div>
-                    </div>
-                    <div className="shrink-0 text-right text-sm text-muted-foreground">
-                      {dueInfo ? (
-                        <>
-                          <div>{dueInfo.dueLabel}</div>
-                          <div>{dueInfo.daysLabel}</div>
-                        </>
-                      ) : (
-                        <div>No due day set</div>
-                      )}
+              return (
+                <div
+                  key={account.id}
+                  className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-2xl border border-border bg-background/40 p-3 text-sm"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold">{account.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {dueInfo?.dueLabel ?? "No due day set"}
                     </div>
                   </div>
-                );
-              })
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No credit card accounts yet.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Spending by account</CardTitle>
-            <CardDescription>Current month, excluding income and transfers.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {monthSpendingByAccount.length > 0 ? (
-              monthSpendingByAccount.map((account) => (
-                <div
-                  key={account.accountId}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-background/40 p-3"
-                >
-                  <div className="min-w-0 truncate text-sm font-medium">
-                    {account.accountName}
-                  </div>
-                  <div className="shrink-0 text-sm font-semibold text-destructive">
-                    {formatCurrency(account.total, user.currency)}
+                  <div className="shrink-0 text-right">
+                    <div
+                      className={
+                        owedAmount > 0
+                          ? "font-semibold text-destructive"
+                          : "font-semibold text-emerald-600"
+                      }
+                    >
+                      {owedAmount > 0
+                        ? `${formatCurrency(owedAmount, user.currency)} owed`
+                        : `${formatCurrency(Math.max(account.balance, 0), user.currency)} credit`}
+                    </div>
+                    <div
+                      className={`text-xs ${
+                        dueInfo
+                          ? dueStatusClass(dueInfo.daysUntilDue)
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {dueInfo?.shortDaysLabel ?? "No due day set"}
+                    </div>
                   </div>
                 </div>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No spending recorded this month.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </section>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent account activity</CardTitle>
-          <CardDescription>Latest expenses, income and transfers.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {recentActivity.length > 0 ? (
-            recentActivity.map((expense) => (
-              <div
-                key={expense.id}
-                className="grid gap-2 rounded-2xl border border-border bg-background/40 p-3 text-sm sm:grid-cols-[110px_1fr_120px]"
-              >
-                <div className="text-muted-foreground">
-                  {formatUkDate(expense.expenseDate)}
-                </div>
-                <div className="min-w-0">
-                  <div className="truncate font-medium">{expense.description}</div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {expense.account?.name ?? "No account"} ·{" "}
-                    {getExpenseCategoryLabel(expense.category)}
-                    {expense.category === ExpenseCategory.TRANSFER
-                      ? " · Transfer"
-                      : ""}
-                  </div>
-                </div>
-                <div
-                  className={`text-left font-semibold sm:text-right ${transactionAmountClass(expense)}`}
-                >
-                  {formatCurrency(Number(expense.amount), user.currency)}
-                </div>
-              </div>
-            ))
+              );
+            })
           ) : (
             <p className="text-sm text-muted-foreground">
-              No account activity yet.
+              No credit card accounts yet.
             </p>
           )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Plus className="size-5 text-primary" />
-            Add account
-          </CardTitle>
-          <CardDescription>
-            Add cash, bank accounts or credit cards for expense logging.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AccountForm
-            accountTypes={accountTypes}
-            action={createAccount}
-            defaultType={AccountType.CASH}
-            submitLabel="Create account"
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick transfer</CardTitle>
-          <CardDescription>
-            Move money between accounts without changing spending totals.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form action={createTransfer} className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <label className="text-sm font-medium">
-                Amount
-                <input
-                  className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  min="0.01"
-                  name="amount"
-                  placeholder="50.00"
-                  required
-                  step="0.01"
-                  type="number"
-                />
-              </label>
-              <label className="text-sm font-medium">
-                From
-                <select
-                  className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  name="fromAccountId"
-                  required
-                >
-                  {activeAccounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-sm font-medium">
-                To
-                <select
-                  className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  name="toAccountId"
-                  required
-                >
-                  {activeAccounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <Button
-              className="h-11 w-full rounded-2xl"
-              disabled={activeAccounts.length < 2}
-              type="submit"
-            >
-              Save transfer
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-lg font-semibold">Saved accounts</h2>
-          <p className="text-sm text-muted-foreground">
-            Balances are calculated from opening balance minus expense amounts.
-          </p>
         </div>
+      </FoldableSection>
 
-        {accounts.map((account) => {
+      <FoldableSection
+        description="Move money between accounts."
+        title="Quick transfer"
+      >
+        <form action={createTransfer} className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="text-sm font-medium">
+              Amount
+              <input
+                className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                min="0.01"
+                name="amount"
+                placeholder="50.00"
+                required
+                step="0.01"
+                type="number"
+              />
+            </label>
+            <label className="text-sm font-medium">
+              From
+              <select
+                className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                name="fromAccountId"
+                required
+              >
+                {activeAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-medium">
+              To
+              <select
+                className="mt-1 h-11 w-full rounded-2xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                name="toAccountId"
+                required
+              >
+                {activeAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <Button
+            className="h-11 w-full rounded-2xl"
+            disabled={activeAccounts.length < 2}
+            type="submit"
+          >
+            Save transfer
+          </Button>
+        </form>
+      </FoldableSection>
+
+      <FoldableSection
+        description="Tap an account to edit settings."
+        title="Saved accounts"
+      >
+        <div className="space-y-2">
+          {accounts.map((account) => {
           const updateAction = updateAccount.bind(null, account.id);
           const disableAction = disableAccount.bind(null, account.id);
           const deleteAction = deleteAccount.bind(null, account.id);
@@ -539,32 +419,42 @@ export default async function AccountsPage() {
             type: account.type,
           });
 
-          return (
-            <Card key={account.id}>
-              <CardHeader className="flex-row items-start justify-between gap-3">
-                <div className="min-w-0 space-y-1">
-                  <CardTitle className="flex items-center gap-2 truncate">
+            return (
+              <details
+                key={account.id}
+                className="group rounded-2xl border border-border bg-background/40"
+              >
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-3 [&::-webkit-details-marker]:hidden">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-2xl bg-primary/10">
                     <AccountIcon type={account.type} />
-                    <span className="truncate">{account.name}</span>
-                  </CardTitle>
-                  <CardDescription>
-                    {getAccountTypeLabel(account.type)} ·{" "}
-                    {account.isDefault ? "Default" : "Not default"} ·{" "}
-                    {account.isActive ? "Active" : "Inactive"}
-                  </CardDescription>
-                </div>
-                <div className="shrink-0 text-right">
-                  <div
-                    className={`text-base font-semibold ${balancePresentation.className}`}
-                  >
-                    {balancePresentation.value}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {balancePresentation.label}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold">
+                      {account.name}
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {getAccountTypeLabel(account.type)} ·{" "}
+                      {account.isDefault ? "Default" : "Not default"} ·{" "}
+                      {account.isActive ? "Active" : "Inactive"}
+                    </div>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
+                <div className="flex shrink-0 items-center gap-2 text-right">
+                  <div>
+                    <div
+                      className={`text-sm font-semibold ${balancePresentation.className}`}
+                    >
+                      {balancePresentation.value}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {balancePresentation.label}
+                    </div>
+                  </div>
+                  <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                </div>
+              </summary>
+              <div className="space-y-3 border-t border-border p-3">
                 <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-3">
                   <div>
                     Opening{" "}
@@ -626,11 +516,24 @@ export default async function AccountsPage() {
                     </Button>
                   </form>
                 </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </section>
+              </div>
+              </details>
+            );
+          })}
+        </div>
+      </FoldableSection>
+
+      <FoldableSection
+        description="Create a new cash, bank or credit card account."
+        title="Add account"
+      >
+        <AccountForm
+          accountTypes={accountTypes}
+          action={createAccount}
+          defaultType={AccountType.CASH}
+          submitLabel="Create account"
+        />
+      </FoldableSection>
     </div>
   );
 }
