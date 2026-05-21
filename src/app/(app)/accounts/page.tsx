@@ -47,6 +47,38 @@ function AccountIcon({ type }: { type: string }) {
   return <Wallet className="size-5 text-primary" />;
 }
 
+function getBalancePresentation({
+  balance,
+  currency,
+  type,
+}: {
+  balance: number;
+  currency: string | null;
+  type: string;
+}) {
+  if (type === AccountType.CREDIT_CARD) {
+    if (balance < 0) {
+      return {
+        className: "text-destructive",
+        label: "Debt",
+        value: `${formatCurrency(Math.abs(balance), currency)} owed`,
+      };
+    }
+
+    return {
+      className: "text-emerald-600",
+      label: "Debt",
+      value: `${formatCurrency(balance, currency)} credit`,
+    };
+  }
+
+  return {
+    className: balance < 0 ? "text-destructive" : "text-emerald-600",
+    label: "Available",
+    value: formatCurrency(balance, currency),
+  };
+}
+
 export default async function AccountsPage() {
   const user = await requireCurrentUser();
   const accounts = await getAccountsWithBalances(user.id);
@@ -164,6 +196,11 @@ export default async function AccountsPage() {
           const disableAction = disableAccount.bind(null, account.id);
           const deleteAction = deleteAccount.bind(null, account.id);
           const defaultAction = setDefaultAccountAction.bind(null, account.id);
+          const balancePresentation = getBalancePresentation({
+            balance: account.balance,
+            currency: user.currency,
+            type: account.type,
+          });
 
           return (
             <Card key={account.id}>
@@ -180,10 +217,14 @@ export default async function AccountsPage() {
                   </CardDescription>
                 </div>
                 <div className="shrink-0 text-right">
-                  <div className="text-base font-semibold">
-                    {formatCurrency(account.balance, user.currency)}
+                  <div
+                    className={`text-base font-semibold ${balancePresentation.className}`}
+                  >
+                    {balancePresentation.value}
                   </div>
-                  <div className="text-xs text-muted-foreground">Balance</div>
+                  <div className="text-xs text-muted-foreground">
+                    {balancePresentation.label}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
