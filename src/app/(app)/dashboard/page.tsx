@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import {
   ArrowUpRight,
   BarChart3,
@@ -720,8 +719,6 @@ export default async function DashboardPage() {
               {importantDocuments.map((document) => {
                 const imageSrc = document.thumbnailUrl;
 
-                console.log("[DEBUG] thumbnailUrl rendered (dashboard):", imageSrc);
-
                 return (
                   <article
                     key={document.id}
@@ -729,11 +726,10 @@ export default async function DashboardPage() {
                   >
                     {imageSrc ? (
                       <div className="relative aspect-[4/3] border-b border-border bg-muted/70">
-                        <Image
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
                           alt={document.title}
-                          className="object-cover"
-                          fill
-                          sizes="(min-width: 640px) 33vw, 100vw"
+                          className="absolute inset-0 h-full w-full object-cover"
                           src={imageSrc}
                         />
                       </div>

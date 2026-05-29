@@ -237,8 +237,6 @@ async function uploadDocumentImageToCloudinary({
 
   const result = (await response.json()) as Partial<CloudinaryUploadResult>;
 
-  console.log("[DEBUG] Cloudinary secure_url returned:", result.secure_url);
-
   if (!result.public_id || !result.secure_url) {
     return null;
   }
@@ -299,7 +297,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const saved = await prisma.importantDocument.create({
+  await prisma.importantDocument.create({
     data: {
       userId: user.id,
       title: parsed.title,
@@ -311,8 +309,6 @@ export async function POST(request: Request) {
       thumbnailUrl: upload.secureUrl,
     },
   });
-
-  console.log("[DEBUG] thumbnailUrl saved:", saved.thumbnailUrl);
 
   revalidatePath("/dashboard");
   revalidatePath("/documents/new");

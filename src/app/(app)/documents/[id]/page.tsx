@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import { ArrowLeft, FileText } from "lucide-react";
 
@@ -58,8 +57,6 @@ export default async function DocumentDetailPage({
   const deleteAction = deleteImportantDocument.bind(null, document.id);
   const imageSrc = document.thumbnailUrl;
 
-  console.log("[DEBUG] thumbnailUrl rendered (detail):", imageSrc);
-
   return (
     <div className="space-y-5">
       <HabitToast />
@@ -89,11 +86,10 @@ export default async function DocumentDetailPage({
         <CardContent className="space-y-4">
           {imageSrc ? (
             <div className="relative aspect-[16/9] overflow-hidden rounded-3xl border border-border bg-muted/70">
-              <Image
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
                 alt={document.title}
-                className="object-cover"
-                fill
-                sizes="(min-width: 768px) 768px, 100vw"
+                className="absolute inset-0 h-full w-full object-cover"
                 src={imageSrc}
               />
             </div>
