@@ -58,6 +58,8 @@ export default async function DocumentDetailPage({
   const deleteAction = deleteImportantDocument.bind(null, document.id);
   const imageSrc = document.thumbnailUrl;
 
+  console.log("[DEBUG] thumbnailUrl rendered (detail):", imageSrc);
+
   return (
     <div className="space-y-5">
       <HabitToast />

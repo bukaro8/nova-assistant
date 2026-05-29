@@ -720,6 +720,8 @@ export default async function DashboardPage() {
               {importantDocuments.map((document) => {
                 const imageSrc = document.thumbnailUrl;
 
+                console.log("[DEBUG] thumbnailUrl rendered (dashboard):", imageSrc);
+
                 return (
                   <article
                     key={document.id}
