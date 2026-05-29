@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import {
   ArrowUpRight,
   BarChart3,
@@ -719,7 +718,18 @@ export default async function DashboardPage() {
           {importantDocuments.length > 0 ? (
             <section className="grid gap-3 sm:grid-cols-3">
               {importantDocuments.map((document) => {
-                const imageSrc = getImportantDocumentImageSrc(document);
+                const imageSrc =
+                  document.thumbnailUrl ?? getImportantDocumentImageSrc(document);
+
+                console.info("[important-documents:image-resolution]", {
+                  location: "dashboard",
+                  nodeEnv: process.env.NODE_ENV,
+                  documentId: document.id,
+                  provider: document.provider,
+                  storageKey: document.storageKey,
+                  thumbnailUrl: document.thumbnailUrl,
+                  resolvedImageSrc: imageSrc,
+                });
 
                 return (
                   <article
@@ -728,11 +738,9 @@ export default async function DashboardPage() {
                   >
                     {imageSrc ? (
                       <div className="relative aspect-[4/3] border-b border-border bg-muted/70">
-                        <Image
+                        <img
                           alt={document.title}
-                          className="object-cover"
-                          fill
-                          sizes="(min-width: 640px) 33vw, 100vw"
+                          className="absolute inset-0 h-full w-full object-cover"
                           src={imageSrc}
                         />
                       </div>

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import { ArrowLeft, FileText } from "lucide-react";
 
@@ -57,7 +56,17 @@ export default async function DocumentDetailPage({
   }
 
   const deleteAction = deleteImportantDocument.bind(null, document.id);
-  const imageSrc = getImportantDocumentImageSrc(document);
+  const imageSrc = document.thumbnailUrl ?? getImportantDocumentImageSrc(document);
+
+  console.info("[important-documents:image-resolution]", {
+    location: "detail",
+    nodeEnv: process.env.NODE_ENV,
+    documentId: document.id,
+    provider: document.provider,
+    storageKey: document.storageKey,
+    thumbnailUrl: document.thumbnailUrl,
+    resolvedImageSrc: imageSrc,
+  });
 
   return (
     <div className="space-y-5">
@@ -88,11 +97,9 @@ export default async function DocumentDetailPage({
         <CardContent className="space-y-4">
           {imageSrc ? (
             <div className="relative aspect-[16/9] overflow-hidden rounded-3xl border border-border bg-muted/70">
-              <Image
+              <img
                 alt={document.title}
-                className="object-cover"
-                fill
-                sizes="(min-width: 768px) 768px, 100vw"
+                className="absolute inset-0 h-full w-full object-cover"
                 src={imageSrc}
               />
             </div>
