@@ -203,12 +203,14 @@ async function uploadDocumentImageToCloudinary({
     documentsRedirectMessage("error", "Document upload failed");
   }
 
+  const thumbnailUrl = getCloudinaryThumbnailUrl(
+    result.public_id,
+    result.secure_url,
+  );
+
   return {
     publicId: result.public_id,
-    thumbnailUrl: getCloudinaryThumbnailUrl(
-      result.public_id,
-      result.secure_url,
-    ),
+    thumbnailUrl,
   };
 }
 
