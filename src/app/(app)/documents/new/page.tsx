@@ -14,7 +14,6 @@ import {
   formatImportantDocumentType,
   importantDocumentTypes,
 } from "@/lib/documents";
-import { createImportantDocument } from "@/server/documents/actions";
 import { requireCurrentUser } from "@/server/dashboard/user";
 
 export const dynamic = "force-dynamic";
@@ -52,7 +51,12 @@ export default async function NewImportantDocumentPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={createImportantDocument} className="space-y-3">
+          <form
+            action="/api/documents"
+            className="space-y-3"
+            encType="multipart/form-data"
+            method="post"
+          >
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="text-sm font-medium">
                 Title
