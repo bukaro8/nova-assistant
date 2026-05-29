@@ -7,6 +7,7 @@ import type { ImportantDocumentType } from "@/generated/prisma/enums";
 import { isImportantDocumentType } from "@/lib/documents";
 import { getUtcForUkDateInput } from "@/server/dashboard/date-utils";
 import { requireCurrentUser } from "@/server/dashboard/user";
+import { getCloudinaryImageUrl } from "@/server/documents/images";
 import { prisma } from "@/server/db/prisma";
 
 const MAX_DOCUMENT_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -143,7 +144,13 @@ async function signCloudinaryUpload({
     .join("");
 }
 
-function getCloudinaryThumbnailUrl(secureUrl: string) {
+function getCloudinaryThumbnailUrl(publicId: string, secureUrl: string) {
+  const thumbnailUrl = getCloudinaryImageUrl(publicId);
+
+  if (thumbnailUrl) {
+    return thumbnailUrl;
+  }
+
   return secureUrl.replace(
     "/upload/",
     "/upload/c_fill,w_640,h_360,q_auto,f_auto/",
@@ -198,7 +205,10 @@ async function uploadDocumentImageToCloudinary({
 
   return {
     publicId: result.public_id,
-    thumbnailUrl: getCloudinaryThumbnailUrl(result.secure_url),
+    thumbnailUrl: getCloudinaryThumbnailUrl(
+      result.public_id,
+      result.secure_url,
+    ),
   };
 }
 

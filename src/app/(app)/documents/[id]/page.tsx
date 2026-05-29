@@ -18,6 +18,7 @@ import {
 } from "@/server/dashboard/date-utils";
 import { requireCurrentUser } from "@/server/dashboard/user";
 import { deleteImportantDocument } from "@/server/documents/actions";
+import { getImportantDocumentImageSrc } from "@/server/documents/images";
 import { prisma } from "@/server/db/prisma";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +46,8 @@ export default async function DocumentDetailPage({
       expiryDate: true,
       notes: true,
       createdAt: true,
+      provider: true,
+      storageKey: true,
       thumbnailUrl: true,
     },
   });
@@ -54,6 +57,7 @@ export default async function DocumentDetailPage({
   }
 
   const deleteAction = deleteImportantDocument.bind(null, document.id);
+  const imageSrc = getImportantDocumentImageSrc(document);
 
   return (
     <div className="space-y-5">
@@ -82,14 +86,14 @@ export default async function DocumentDetailPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {document.thumbnailUrl ? (
+          {imageSrc ? (
             <div className="relative aspect-[16/9] overflow-hidden rounded-3xl border border-border bg-muted/70">
               <Image
                 alt={document.title}
                 className="object-cover"
                 fill
                 sizes="(min-width: 768px) 768px, 100vw"
-                src={document.thumbnailUrl}
+                src={imageSrc}
               />
             </div>
           ) : (

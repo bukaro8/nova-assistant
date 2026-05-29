@@ -51,6 +51,7 @@ import {
   getWeekChartDays,
 } from "@/server/dashboard/date-utils";
 import { requireCurrentUser } from "@/server/dashboard/user";
+import { getImportantDocumentImageSrc } from "@/server/documents/images";
 import { prisma } from "@/server/db/prisma";
 
 export const dynamic = "force-dynamic";
@@ -220,6 +221,8 @@ export default async function DashboardPage() {
           title: true,
           type: true,
           expiryDate: true,
+          provider: true,
+          storageKey: true,
           thumbnailUrl: true,
         },
         orderBy: [
@@ -715,52 +718,56 @@ export default async function DashboardPage() {
         <CardContent>
           {importantDocuments.length > 0 ? (
             <section className="grid gap-3 sm:grid-cols-3">
-              {importantDocuments.map((document) => (
-                <article
-                  key={document.id}
-                  className="flex min-h-56 flex-col overflow-hidden rounded-3xl border border-border bg-background/40"
-                >
-                  {document.thumbnailUrl ? (
-                    <div className="relative aspect-[4/3] border-b border-border bg-muted/70">
-                      <Image
-                        alt={document.title}
-                        className="object-cover"
-                        fill
-                        sizes="(min-width: 640px) 33vw, 100vw"
-                        src={document.thumbnailUrl}
-                      />
-                    </div>
-                  ) : (
-                    <div className="grid aspect-[4/3] place-items-center border-b border-border bg-muted/70">
-                      <div className="grid size-14 place-items-center rounded-2xl border border-border bg-background text-muted-foreground shadow-sm">
-                        <FileText className="size-7" />
+              {importantDocuments.map((document) => {
+                const imageSrc = getImportantDocumentImageSrc(document);
+
+                return (
+                  <article
+                    key={document.id}
+                    className="flex min-h-56 flex-col overflow-hidden rounded-3xl border border-border bg-background/40"
+                  >
+                    {imageSrc ? (
+                      <div className="relative aspect-[4/3] border-b border-border bg-muted/70">
+                        <Image
+                          alt={document.title}
+                          className="object-cover"
+                          fill
+                          sizes="(min-width: 640px) 33vw, 100vw"
+                          src={imageSrc}
+                        />
                       </div>
-                    </div>
-                  )}
-                  <div className="flex flex-1 flex-col gap-3 p-3">
-                    <div className="min-w-0 space-y-1">
-                      <h3 className="truncate font-semibold">
-                        {document.title}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {formatImportantDocumentType(document.type)}
-                      </p>
-                      {document.expiryDate ? (
-                        <p className="text-xs text-muted-foreground">
-                          Expires {formatShortUkDate(document.expiryDate)}
+                    ) : (
+                      <div className="grid aspect-[4/3] place-items-center border-b border-border bg-muted/70">
+                        <div className="grid size-14 place-items-center rounded-2xl border border-border bg-background text-muted-foreground shadow-sm">
+                          <FileText className="size-7" />
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex flex-1 flex-col gap-3 p-3">
+                      <div className="min-w-0 space-y-1">
+                        <h3 className="truncate font-semibold">
+                          {document.title}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {formatImportantDocumentType(document.type)}
                         </p>
-                      ) : null}
+                        {document.expiryDate ? (
+                          <p className="text-xs text-muted-foreground">
+                            Expires {formatShortUkDate(document.expiryDate)}
+                          </p>
+                        ) : null}
+                      </div>
+                      <Link
+                        href={`/documents/${document.id}`}
+                        className="mt-auto inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-2xl border border-border bg-background px-2.5 text-sm font-medium transition-colors hover:bg-muted"
+                      >
+                        <Eye className="size-4" />
+                        View
+                      </Link>
                     </div>
-                    <Link
-                      href={`/documents/${document.id}`}
-                      className="mt-auto inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-2xl border border-border bg-background px-2.5 text-sm font-medium transition-colors hover:bg-muted"
-                    >
-                      <Eye className="size-4" />
-                      View
-                    </Link>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </section>
           ) : (
             <div className="rounded-3xl border border-border bg-background/40 p-4 text-sm text-muted-foreground">
