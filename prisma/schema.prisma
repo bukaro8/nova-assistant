@@ -24,6 +24,7 @@ model User {
   habitLogs             HabitLog[]
   expenses              Expense[]
   accounts              Account[]
+  importantDocuments    ImportantDocument[]
   recurringPayments     RecurringPayment[]
   expenseCategoryRules  ExpenseCategoryRule[]
   reminderLogs          ReminderLog[]
@@ -187,6 +188,25 @@ model RecurringPayment {
   @@index([isActive, nextRunAt])
 }
 
+model ImportantDocument {
+  id           String                @id @default(cuid())
+  userId       String
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String
+  type         ImportantDocumentType
+  provider     String
+  storageKey   String
+  thumbnailUrl String?
+  expiryDate   DateTime?
+  notes        String?               @db.Text
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@index([userId])
+  @@index([userId, type])
+  @@index([userId, expiryDate])
+}
+
 model ExpenseCategoryRule {
   id        String          @id @default(cuid())
   userId    String
@@ -261,6 +281,16 @@ enum ExpenseCategory {
   WORK
   INCOME
   TRANSFER
+  OTHER
+}
+
+enum ImportantDocumentType {
+  PASSPORT
+  DRIVING_LICENCE
+  INSURANCE
+  VEHICLE
+  MEDICAL
+  PET
   OTHER
 }
 
