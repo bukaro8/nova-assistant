@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, FileText } from "lucide-react";
+import { ArrowLeft, ExternalLink, FileText, Pencil } from "lucide-react";
 
 import { ConfirmActionButton, HabitToast } from "@/components/habit-manage-controls";
 import {
@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { formatImportantDocumentType } from "@/lib/documents";
 import {
   formatShortUkDate,
@@ -62,11 +63,11 @@ export default async function DocumentDetailPage({
       <HabitToast />
       <header className="space-y-3">
         <Link
-          href="/dashboard"
+          href="/documents"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground"
         >
           <ArrowLeft className="size-4" />
-          Dashboard
+          Documents
         </Link>
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">Important Documents</p>
@@ -77,24 +78,41 @@ export default async function DocumentDetailPage({
       </header>
 
       <Card>
-        <CardHeader>
-          <CardTitle>{document.title}</CardTitle>
-          <CardDescription>
-            {formatImportantDocumentType(document.type)}
-          </CardDescription>
+        <CardHeader className="flex-row items-start justify-between gap-3">
+          <div>
+            <CardTitle>{document.title}</CardTitle>
+            <CardDescription>
+              {formatImportantDocumentType(document.type)}
+            </CardDescription>
+          </div>
+          <Link href={`/documents/${document.id}/edit`}>
+            <Button variant="outline" size="sm">
+              <Pencil className="size-4" />
+              Edit
+            </Button>
+          </Link>
         </CardHeader>
         <CardContent className="space-y-4">
           {imageSrc ? (
-            <div className="relative aspect-[16/9] overflow-hidden rounded-3xl border border-border bg-muted/70">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-3xl border border-border bg-muted/70">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 alt={document.title}
-                className="absolute inset-0 h-full w-full object-cover"
+                className="absolute inset-0 h-full w-full object-contain"
                 src={imageSrc}
               />
+              <a
+                href={imageSrc}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="absolute bottom-3 right-3 inline-flex h-8 items-center gap-1.5 rounded-lg bg-background/90 px-2.5 text-sm font-medium text-foreground shadow-sm backdrop-blur transition-colors hover:bg-background"
+              >
+                <ExternalLink className="size-4" />
+                View full image
+              </a>
             </div>
           ) : (
-            <div className="grid aspect-[16/9] place-items-center rounded-3xl border border-border bg-muted/70">
+            <div className="grid aspect-[4/3] place-items-center rounded-3xl border border-border bg-muted/70">
               <div className="grid size-20 place-items-center rounded-3xl border border-border bg-background text-muted-foreground shadow-sm">
                 <FileText className="size-10" />
               </div>

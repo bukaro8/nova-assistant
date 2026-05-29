@@ -3,7 +3,6 @@ import {
   ArrowUpRight,
   BarChart3,
   Dumbbell,
-  Eye,
   FileText,
   Plus,
   ReceiptText,
@@ -35,7 +34,6 @@ import {
   getHabitStats,
 } from "@/lib/habit-stats";
 import { formatCurrency } from "@/lib/currency";
-import { formatImportantDocumentType } from "@/lib/documents";
 import { ExpenseCategory } from "@/generated/prisma/enums";
 import {
   findClosestWeightLog,
@@ -142,7 +140,7 @@ export default async function DashboardPage() {
     habitStatsLogs,
     weekExpenses,
     weightLogs,
-    importantDocuments,
+    importantDocumentsCount,
   ] =
     await Promise.all([
       prisma.habit.findMany({
@@ -210,31 +208,10 @@ export default async function DashboardPage() {
         },
         take: 30,
       }),
-      prisma.importantDocument.findMany({
+      prisma.importantDocument.count({
         where: {
           userId: user.id,
         },
-        select: {
-          id: true,
-          title: true,
-          type: true,
-          expiryDate: true,
-          provider: true,
-          storageKey: true,
-          thumbnailUrl: true,
-        },
-        orderBy: [
-          {
-            expiryDate: {
-              sort: "asc",
-              nulls: "last",
-            },
-          },
-          {
-            createdAt: "desc",
-          },
-        ],
-        take: 6,
       }),
     ]);
 
@@ -706,70 +683,32 @@ export default async function DashboardPage() {
             <CardDescription>Passport, licence and insurance records</CardDescription>
           </div>
           <Link
-            href="/documents/new"
+            href="/documents"
             className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            <Plus className="size-4" />
-            Add document
+            <FileText className="size-4" />
+            Open documents
           </Link>
         </CardHeader>
         <CardContent>
-          {importantDocuments.length > 0 ? (
-            <section className="grid gap-3 sm:grid-cols-3">
-              {importantDocuments.map((document) => {
-                const imageSrc = document.thumbnailUrl;
-
-                return (
-                  <article
-                    key={document.id}
-                    className="flex min-h-56 flex-col overflow-hidden rounded-3xl border border-border bg-background/40"
-                  >
-                    {imageSrc ? (
-                      <div className="relative aspect-[4/3] border-b border-border bg-muted/70">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          alt={document.title}
-                          className="absolute inset-0 h-full w-full object-cover"
-                          src={imageSrc}
-                        />
-                      </div>
-                    ) : (
-                      <div className="grid aspect-[4/3] place-items-center border-b border-border bg-muted/70">
-                        <div className="grid size-14 place-items-center rounded-2xl border border-border bg-background text-muted-foreground shadow-sm">
-                          <FileText className="size-7" />
-                        </div>
-                      </div>
-                    )}
-                    <div className="flex flex-1 flex-col gap-3 p-3">
-                      <div className="min-w-0 space-y-1">
-                        <h3 className="truncate font-semibold">
-                          {document.title}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          {formatImportantDocumentType(document.type)}
-                        </p>
-                        {document.expiryDate ? (
-                          <p className="text-xs text-muted-foreground">
-                            Expires {formatShortUkDate(document.expiryDate)}
-                          </p>
-                        ) : null}
-                      </div>
-                      <Link
-                        href={`/documents/${document.id}`}
-                        className="mt-auto inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-2xl border border-border bg-background px-2.5 text-sm font-medium transition-colors hover:bg-muted"
-                      >
-                        <Eye className="size-4" />
-                        View
-                      </Link>
-                    </div>
-                  </article>
-                );
-              })}
-            </section>
+          {importantDocumentsCount > 0 ? (
+            <Link
+              href="/documents"
+              className="flex items-center justify-between rounded-3xl border border-border bg-background/40 p-4 text-sm transition-colors hover:bg-muted"
+            >
+              <span className="text-muted-foreground">
+                {importantDocumentsCount} document{importantDocumentsCount === 1 ? "" : "s"} saved
+              </span>
+              <ArrowUpRight className="size-4 text-muted-foreground" />
+            </Link>
           ) : (
-            <div className="rounded-3xl border border-border bg-background/40 p-4 text-sm text-muted-foreground">
-              No important documents saved yet.
-            </div>
+            <Link
+              href="/documents/new"
+              className="flex items-center justify-between rounded-3xl border border-border bg-background/40 p-4 text-sm transition-colors hover:bg-muted"
+            >
+              <span className="text-muted-foreground">Add your first document</span>
+              <ArrowUpRight className="size-4 text-muted-foreground" />
+            </Link>
           )}
         </CardContent>
       </Card>
