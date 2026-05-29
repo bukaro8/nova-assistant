@@ -1,5 +1,4 @@
 import { revalidatePath } from "next/cache";
-import { NextResponse } from "next/server";
 
 import type { ImportantDocumentType } from "@/generated/prisma/enums";
 import { isImportantDocumentType } from "@/lib/documents";
@@ -32,20 +31,27 @@ type CloudinaryUploadResult = {
 };
 
 function redirectWithMessage(
-  request: Request,
   pathname: string,
   type: "success" | "error",
   message: string,
 ) {
-  const url = new URL(pathname, request.url);
+  const params = new URLSearchParams({ type, message });
 
-  url.search = new URLSearchParams({ type, message }).toString();
-
-  return NextResponse.redirect(url, { status: 303 });
+  return new Response(null, {
+    headers: {
+      Location: `${pathname}?${params.toString()}`,
+    },
+    status: 303,
+  });
 }
 
-function redirectToLogin(request: Request) {
-  return NextResponse.redirect(new URL("/login", request.url), { status: 303 });
+function redirectToLogin() {
+  return new Response(null, {
+    headers: {
+      Location: "/login",
+    },
+    status: 303,
+  });
 }
 
 function parseDateInput(value: string) {
@@ -245,7 +251,7 @@ export async function POST(request: Request) {
   const user = await getCurrentUser();
 
   if (!user) {
-    return redirectToLogin(request);
+    return redirectToLogin();
   }
 
   let formData: FormData;
@@ -254,7 +260,6 @@ export async function POST(request: Request) {
     formData = await request.formData();
   } catch {
     return redirectWithMessage(
-      request,
       "/documents/new",
       "error",
       "Invalid document",
@@ -265,7 +270,6 @@ export async function POST(request: Request) {
 
   if (!parsed) {
     return redirectWithMessage(
-      request,
       "/documents/new",
       "error",
       "Invalid document",
@@ -274,7 +278,6 @@ export async function POST(request: Request) {
 
   if (!(await isValidImageFile(parsed.image))) {
     return redirectWithMessage(
-      request,
       "/documents/new",
       "error",
       "Invalid image",
@@ -288,7 +291,6 @@ export async function POST(request: Request) {
 
   if (!upload) {
     return redirectWithMessage(
-      request,
       "/documents/new",
       "error",
       "Document upload failed",
@@ -312,7 +314,6 @@ export async function POST(request: Request) {
   revalidatePath("/documents/new");
 
   return redirectWithMessage(
-    request,
     "/dashboard",
     "success",
     "Document saved",
