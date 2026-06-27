@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  deleteWeightLog,
   saveWeight,
   updateWeightGoal,
 } from "@/server/dashboard/actions";
@@ -129,32 +130,122 @@ export default async function WeightPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Weight</h1>
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard
-          title="Latest"
-          description={latest ? formatUkDate(latest.createdAt) : "No logs yet"}
-          value={latest ? `${latest.weight.toFixed(1)} kg` : "No data"}
-        />
-        <StatCard
-          title="Weekly change"
-          description="Compared with last week"
-          value={weeklyText ?? "Not enough data"}
-        />
-        <StatCard
-          title="Monthly change"
-          description="Compared with last month"
-          value={monthlyText ?? "Not enough data"}
-        />
-        <StatCard
-          title="Lowest"
-          description="Recorded weight"
-          value={lowestWeight ? `${lowestWeight.toFixed(1)} kg` : "No data"}
-        />
-        <StatCard
-          title="Highest"
-          description="Recorded weight"
-          value={highestWeight ? `${highestWeight.toFixed(1)} kg` : "No data"}
-        />
+      <Card>
+        <CardHeader>
+          <CardTitle>Weight trend</CardTitle>
+          <CardDescription>
+            {weeklyText ?? "Add more logs to compare this week."}
+            {monthlyText ? ` · ${monthlyText}` : ""}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <StatCard
+              title="Latest"
+              description={latest ? formatUkDate(latest.createdAt) : "No logs yet"}
+              value={latest ? `${latest.weight.toFixed(1)} kg` : "No data"}
+            />
+            <StatCard
+              title="Weekly change"
+              description="Compared with last week"
+              value={weeklyText ?? "Not enough data"}
+            />
+            <StatCard
+              title="Monthly change"
+              description="Compared with last month"
+              value={monthlyText ?? "Not enough data"}
+            />
+            <StatCard
+              title="Lowest"
+              description="Recorded weight"
+              value={lowestWeight ? `${lowestWeight.toFixed(1)} kg` : "No data"}
+            />
+            <StatCard
+              title="Highest"
+              description="Recorded weight"
+              value={highestWeight ? `${highestWeight.toFixed(1)} kg` : "No data"}
+            />
+          </section>
+          <WeightTrendChart data={chartData} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Add weight</CardTitle>
+          <CardDescription>Date is optional. Empty date uses today.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={saveWeight} className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1.5">
+                <span className="text-sm font-medium">Weight</span>
+                <input
+                  className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  inputMode="decimal"
+                  name="weight"
+                  placeholder="82.5"
+                  required
+                  type="number"
+                  step="0.1"
+                />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-sm font-medium">Date</span>
+                <input
+                  className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  name="date"
+                  type="date"
+                />
+              </label>
+            </div>
+            <Button className="h-12 w-full rounded-xl" type="submit">
+              Save weight
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold">Latest logs</h2>
+          <p className="text-sm text-muted-foreground">
+            Your most recent weight check-ins.
+          </p>
+        </div>
+        {logs.length === 0 ? (
+          <Card>
+            <CardContent className="pt-4 text-sm text-muted-foreground">
+              No weight logs yet. Add your first check-in above.
+            </CardContent>
+          </Card>
+        ) : (
+          logs.map((log) => (
+            <Card key={log.id}>
+              <CardHeader className="flex-row items-center justify-between gap-3">
+                <div>
+                  <CardTitle>{Number(log.weight).toFixed(1)} kg</CardTitle>
+                  <CardDescription>{formatUkDate(log.createdAt)}</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-lg bg-muted px-2 py-1 text-xs text-muted-foreground">
+                    {log.source}
+                  </span>
+                  <form action={deleteWeightLog}>
+                    <input name="logId" type="hidden" value={log.id} />
+                    <Button
+                      className="h-9 rounded-xl"
+                      type="submit"
+                      variant="destructive"
+                    >
+                      Delete
+                    </Button>
+                  </form>
+                </div>
+              </CardHeader>
+            </Card>
+          ))
+        )}
       </section>
 
       <Card>
@@ -221,85 +312,6 @@ export default async function WeightPage() {
           )}
         </CardContent>
       </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Trend</CardTitle>
-          <CardDescription>
-            {weeklyText ?? "Add more logs to compare this week."}
-            {monthlyText ? ` · ${monthlyText}` : ""}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <WeightTrendChart data={chartData} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Add weight</CardTitle>
-          <CardDescription>Date is optional. Empty date uses today.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form action={saveWeight} className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1.5">
-                <span className="text-sm font-medium">Weight</span>
-                <input
-                  className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                  inputMode="decimal"
-                  name="weight"
-                  placeholder="82.5"
-                  required
-                  type="number"
-                  step="0.1"
-                />
-              </label>
-              <label className="space-y-1.5">
-                <span className="text-sm font-medium">Date</span>
-                <input
-                  className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                  name="date"
-                  type="date"
-                />
-              </label>
-            </div>
-            <Button className="h-12 w-full rounded-xl" type="submit">
-              Save weight
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      {logs.length === 0 ? (
-        <Card>
-          <CardContent className="pt-4 text-sm text-muted-foreground">
-            No weight logs yet. Add your first check-in above.
-          </CardContent>
-        </Card>
-      ) : (
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-lg font-semibold">Latest logs</h2>
-            <p className="text-sm text-muted-foreground">
-              Your most recent weight check-ins.
-            </p>
-          </div>
-          {logs.map((log) => (
-            <Card key={log.id}>
-              <CardHeader className="flex-row items-center justify-between gap-3">
-                <div>
-                  <CardTitle>{Number(log.weight).toFixed(1)} kg</CardTitle>
-                  <CardDescription>{formatUkDate(log.createdAt)}</CardDescription>
-                </div>
-                <span className="rounded-lg bg-muted px-2 py-1 text-xs text-muted-foreground">
-                  {log.source}
-                </span>
-              </CardHeader>
-            </Card>
-          ))}
-        </section>
-      )}
     </div>
   );
 }

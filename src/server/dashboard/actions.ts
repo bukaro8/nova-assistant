@@ -412,6 +412,26 @@ export async function saveWeight(formData: FormData) {
   revalidatePath("/today");
 }
 
+export async function deleteWeightLog(formData: FormData) {
+  const user = await requireCurrentUser();
+  const logId = String(formData.get("logId") ?? "").trim();
+
+  if (!logId) {
+    return;
+  }
+
+  await prisma.weightLog.deleteMany({
+    where: {
+      id: logId,
+      userId: user.id,
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/weight");
+  revalidatePath("/today");
+}
+
 export async function updateWeightGoal(formData: FormData) {
   const user = await requireCurrentUser();
   const rawTargetWeight = String(formData.get("targetWeight") ?? "").trim();
