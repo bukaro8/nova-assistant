@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { Target } from "lucide-react";
 
 import { AssistantDisabledCard } from "@/components/assistant-disabled-card";
-import { WeightTrendChart } from "@/components/weight-trend-chart";
+import { WeightProgressChart } from "@/components/weight-progress-chart";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,6 +19,8 @@ import {
 import {
   formatShortUkDate,
   formatUkDate,
+  getUkClock,
+  getUtcForUkDateInput,
 } from "@/server/dashboard/date-utils";
 import { requireCurrentUser } from "@/server/dashboard/user";
 import { prisma } from "@/server/db/prisma";
@@ -25,32 +28,94 @@ import {
   findClosestWeightLog,
   formatWeightChange,
   getGoalProgress,
+  getRollingWeightAverage,
 } from "@/lib/weight";
 
 export const dynamic = "force-dynamic";
 
-function StatCard({
+const DAY_MS = 86_400_000;
+
+const periodOptions = [
+  { value: "7d", label: "7 days", days: 7 },
+  { value: "30d", label: "30 days", days: 30 },
+  { value: "3m", label: "3 months", days: 90 },
+  { value: "6m", label: "6 months", days: 180 },
+  { value: "1y", label: "1 year", days: 365 },
+  { value: "all", label: "All time", days: null },
+] as const;
+
+type SearchParams = Promise<{
+  period?: string;
+}>;
+
+function getPeriod(value: string | undefined) {
+  return (
+    periodOptions.find((option) => option.value === value) ??
+    periodOptions.find((option) => option.value === "30d")!
+  );
+}
+
+function getPeriodStart(days: number | null) {
+  if (days === null) {
+    return null;
+  }
+
+  const today = getUkClock();
+  const midday = new Date(`${today.dateKey}T12:00:00.000Z`);
+  const startDateKey = getUkClock(
+    new Date(midday.getTime() - (days - 1) * DAY_MS),
+  ).dateKey;
+
+  return getUtcForUkDateInput(startDateKey);
+}
+
+function formatWeightValue(value: number | null) {
+  return value === null ? "No data" : `${value.toFixed(1)} kg`;
+}
+
+function formatPeriodDelta(change: number | null) {
+  if (change === null) {
+    return "Not enough data";
+  }
+
+  if (Math.abs(change) < 0.05) {
+    return "No change";
+  }
+
+  return `${change > 0 ? "+" : "-"}${Math.abs(change).toFixed(1)} kg`;
+}
+
+function WeightMetric({
   title,
   description,
   value,
+  valueClassName,
 }: {
   title: string;
   description: string;
   value: string;
+  valueClassName?: string;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="text-3xl font-semibold">{value}</CardContent>
-    </Card>
+    <div className="min-w-0 px-4 py-3">
+      <p className="text-sm font-medium text-muted-foreground">{title}</p>
+      <p
+        className={`mt-1 truncate text-xl font-semibold ${valueClassName ?? ""}`}
+      >
+        {value}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+    </div>
   );
 }
 
-export default async function WeightPage() {
+export default async function WeightPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const user = await requireCurrentUser();
+  const { period: periodParam } = await searchParams;
 
   if (!user.assistantWeight) {
     return (
@@ -75,10 +140,11 @@ export default async function WeightPage() {
       weight: Number(log.weight),
       createdAt: log.createdAt,
     }));
-  const chartData = trendLogs.map((log) => ({
-    label: formatShortUkDate(log.createdAt),
-    weight: log.weight,
-  }));
+  const period = getPeriod(periodParam);
+  const periodStart = getPeriodStart(period.days);
+  const periodLogs = periodStart
+    ? trendLogs.filter((log) => log.createdAt >= periodStart)
+    : trendLogs;
   const latest = trendLogs.at(-1) ?? null;
   const earliest = trendLogs.at(0) ?? null;
   const weeklyComparison =
@@ -106,18 +172,35 @@ export default async function WeightPage() {
       ? latest.weight - monthlyComparison.weight
       : null;
   const targetWeight = user.targetWeight ? Number(user.targetWeight) : null;
+  const chartData = periodLogs.map((log, index) => ({
+    date: formatUkDate(log.createdAt),
+    label: formatShortUkDate(log.createdAt),
+    rollingAverage: getRollingWeightAverage(periodLogs, index),
+    weight: log.weight,
+  }));
+  const periodFirst = periodLogs[0] ?? null;
+  const periodLatest = periodLogs.at(-1) ?? null;
+  const periodChange =
+    periodFirst && periodLatest && periodLogs.length > 1
+      ? periodLatest.weight - periodFirst.weight
+      : null;
+  const periodAverage =
+    periodLogs.length > 0
+      ? periodLogs.reduce((total, log) => total + log.weight, 0) /
+        periodLogs.length
+      : null;
   const goalProgress = getGoalProgress({
     startWeight: earliest?.weight ?? null,
     currentWeight: latest?.weight ?? null,
     targetWeight,
   });
   const lowestWeight =
-    trendLogs.length > 0
-      ? Math.min(...trendLogs.map((log) => log.weight))
+    periodLogs.length > 0
+      ? Math.min(...periodLogs.map((log) => log.weight))
       : null;
   const highestWeight =
-    trendLogs.length > 0
-      ? Math.max(...trendLogs.map((log) => log.weight))
+    periodLogs.length > 0
+      ? Math.max(...periodLogs.map((log) => log.weight))
       : null;
   const weeklyText = formatWeightChange(weeklyChange, "this week");
   const monthlyText = formatWeightChange(monthlyChange, "this month");
@@ -130,42 +213,91 @@ export default async function WeightPage() {
       </header>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Weight trend</CardTitle>
-          <CardDescription>
-            {weeklyText ?? "Add more logs to compare this week."}
-            {monthlyText ? ` · ${monthlyText}` : ""}
-          </CardDescription>
+        <CardHeader className="space-y-4">
+          <div>
+            <CardTitle>Weight trend</CardTitle>
+            <CardDescription>
+              {period.days === null
+                ? "Your complete check-in history."
+                : `Showing the last ${period.label.toLowerCase()}.`}
+            </CardDescription>
+          </div>
+          <nav
+            aria-label="Weight chart period"
+            className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
+          >
+            {periodOptions.map((option) => {
+              const selected = option.value === period.value;
+
+              return (
+                <Link
+                  aria-current={selected ? "page" : undefined}
+                  className={`shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    selected
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                  }`}
+                  href={
+                    option.value === "30d"
+                      ? "/weight"
+                      : `/weight?period=${option.value}`
+                  }
+                  key={option.value}
+                >
+                  {option.label}
+                </Link>
+              );
+            })}
+          </nav>
         </CardHeader>
         <CardContent className="space-y-4">
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <StatCard
+          <section className="grid grid-cols-2 divide-x divide-y overflow-hidden rounded-xl border border-border sm:grid-cols-4">
+            <WeightMetric
               title="Latest"
-              description={latest ? formatUkDate(latest.createdAt) : "No logs yet"}
-              value={latest ? `${latest.weight.toFixed(1)} kg` : "No data"}
+              description={
+                latest ? formatUkDate(latest.createdAt) : "No logs yet"
+              }
+              value={formatWeightValue(latest?.weight ?? null)}
             />
-            <StatCard
-              title="Weekly change"
-              description="Compared with last week"
-              value={weeklyText ?? "Not enough data"}
+            <WeightMetric
+              description={
+                period.days === null
+                  ? "First to latest check-in"
+                  : `Across ${period.label.toLowerCase()}`
+              }
+              title="Change"
+              value={formatPeriodDelta(periodChange)}
+              valueClassName={
+                periodChange === null
+                  ? undefined
+                  : periodChange <= 0
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-amber-600 dark:text-amber-400"
+              }
             />
-            <StatCard
-              title="Monthly change"
-              description="Compared with last month"
-              value={monthlyText ?? "Not enough data"}
+            <WeightMetric
+              description={`${periodLogs.length} check-in${
+                periodLogs.length === 1 ? "" : "s"
+              }`}
+              title="Average"
+              value={formatWeightValue(periodAverage)}
             />
-            <StatCard
-              title="Lowest"
-              description="Recorded weight"
-              value={lowestWeight ? `${lowestWeight.toFixed(1)} kg` : "No data"}
-            />
-            <StatCard
-              title="Highest"
-              description="Recorded weight"
-              value={highestWeight ? `${highestWeight.toFixed(1)} kg` : "No data"}
+            <WeightMetric
+              description={
+                lowestWeight !== null && highestWeight !== null
+                  ? `${(highestWeight - lowestWeight).toFixed(1)} kg range`
+                  : "No data"
+              }
+              title="Low"
+              value={formatWeightValue(lowestWeight)}
             />
           </section>
-          <WeightTrendChart data={chartData} />
+          <WeightProgressChart data={chartData} targetWeight={targetWeight} />
+          {weeklyText || monthlyText ? (
+            <p className="text-sm text-muted-foreground">
+              {[weeklyText, monthlyText].filter(Boolean).join(" · ")}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 

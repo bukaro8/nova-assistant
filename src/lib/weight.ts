@@ -5,6 +5,17 @@ export type WeightEntry = {
   createdAt: Date;
 };
 
+export function getRollingWeightAverage(
+  logs: WeightEntry[],
+  index: number,
+  windowSize = 3,
+) {
+  const start = Math.max(0, index - windowSize + 1);
+  const entries = logs.slice(start, index + 1);
+
+  return entries.reduce((total, entry) => total + entry.weight, 0) / entries.length;
+}
+
 export function findClosestWeightLog({
   logs,
   latest,
