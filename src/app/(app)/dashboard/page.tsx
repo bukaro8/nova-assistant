@@ -206,7 +206,6 @@ export default async function DashboardPage() {
         orderBy: {
           createdAt: "desc",
         },
-        take: 30,
       }),
       prisma.importantDocument.count({
         where: {

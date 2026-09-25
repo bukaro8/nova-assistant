@@ -68,7 +68,6 @@ export default async function WeightPage() {
     orderBy: {
       createdAt: "desc",
     },
-    take: 30,
   });
   const trendLogs = logs
     .toReversed()
